@@ -24,9 +24,14 @@ curl -X POST 'https://dep-bouncer-6ad22414-giberelin-heapify-global-community.ap
   --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"bouncer_replay_incident","arguments":{"incident":"axios"}}}'
 ```
 
-**Works with:** NitroChat ([screenshots below](#before--after)); Claude Code + Cursor
-([guard hooks](guard/README.md)); any remote MCP client via the URL (Claude, ChatGPT, Cursor,
-NitroStudio).
+**Works with** (tested on the live server):
+- **NitroChat**: verdict card rendered ([screenshots below](#before--after)).
+- **Claude Code as an MCP client**: `claude mcp add --transport http dep-bouncer <URL>`; a
+  real session called `bouncer_check_package` and `bouncer_replay_incident`, reported BLOCK
+  with the evidence, and recommended a safe axios version.
+- **Claude Code guard hook**: blocked the agent's own `npm install` of a non-existent package
+  ([guard](guard/README.md); Cursor hook config included).
+- Any Streamable-HTTP MCP client via the URL (e.g. Cursor, NitroStudio, ChatGPT developer mode).
 
 Dep Bouncer is an MCP server an AI coding agent calls *before* it installs or upgrades an npm
 package. It compares the release with **the package's own history** (who published it, whether
