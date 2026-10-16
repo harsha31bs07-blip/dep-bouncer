@@ -102,12 +102,17 @@ versions npm removed, and npm's `-security` placeholders are blocked outright.
 packages (presumed healthy) to measure false positives. Latest run ([bench/RESULTS.md](bench/RESULTS.md)):
 
 - **Replayed hijacks: 5 / 5 BLOCK**, none of which OSV knew about at the replay time.
-- **60 popular releases: 58 ALLOW, 2 REVIEW, 0 BLOCK.** Both REVIEWs were published less than
-  24 hours before the run, with one weak code finding each.
+- **60 popular releases: 56 ALLOW, 4 REVIEW, 0 BLOCK.** The REVIEWs: TypeScript 7 (a full
+  rewrite published by a new account), webpack and next (published < 18 h before the run;
+  next's 25 MB+ tarball also can't be diffed), and vitest (a new `.npmrc` reference next to
+  process execution). REVIEW means "ask the human", not "block".
 
-The first run flagged webpack and vitest as BLOCK; that led to the "new to the whole package"
-rule in `code-diff` (bundlers rename chunk files every release). Numbers will move as npm
-does; CI re-runs the replays on every push.
+How we got here: the first run flagged webpack and vitest as BLOCK (bundlers rename chunk files
+every release). An independent security review then showed that relaxing that rule too far
+let a new payload hide behind harmless existing code, so `code-diff` now compares **lines**:
+renamed chunks stay quiet, a newly added payload line is always reported, and only low-risk
+patterns (process execution, minified code) are discounted when the package already had them.
+Numbers will move as npm does; CI re-runs the replays on every push.
 
 ## How it compares (honestly)
 
@@ -179,7 +184,7 @@ Then ask: *"Use the safe_install prompt, then add axios to this project."*
 ```bash
 npm install
 npm run build
-npm test            # 70+ tests, offline
+npm test            # 170+ tests, offline
 npm run bench       # replays + false-positive scan (needs network)
 npm run dev         # stdio, for NitroStudio
 ```
