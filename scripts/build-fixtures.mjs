@@ -158,6 +158,19 @@ async function fetchChecked(url) {
   return response;
 }
 
+/** Keeps `created` and every publish time up to the target, so the fixture shows the
+ * registry as it was at the moment of the hijack (and stays small for nx's 2,700 versions). */
+function trimTime(time, targetVersion, targetPublished) {
+  const cutoff = Date.parse(targetPublished);
+  const kept = { created: time.created };
+  for (const [version, published] of Object.entries(time)) {
+    if (version === 'created' || version === 'modified') continue;
+    if (Date.parse(published) <= cutoff) kept[version] = published;
+  }
+  kept[targetVersion] = targetPublished;
+  return kept;
+}
+
 async function main() {
   await mkdir(directory, { recursive: true });
   for (const spec of incidents) {
@@ -196,7 +209,7 @@ async function main() {
       osvFirstAdvisory: { id: spec.advisory, lagHours: spec.lagHours },
       safeVersion: spec.safeVersion, weeklyDownloads: downloads.downloads,
       baseline, target,
-      time: { ...packument.time, [spec.targetVersion]: packument.time[spec.targetVersion] ?? spec.published },
+      time: trimTime(packument.time, spec.targetVersion, packument.time[spec.targetVersion] ?? spec.published),
       files: { [spec.goodVersion]: goodFiles, [spec.targetVersion]: files },
     };
     if (spec.id === 'axios') fixture.packages = {
