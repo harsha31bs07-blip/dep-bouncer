@@ -55,3 +55,6 @@ uploads/
 *.pem
 *.key
 tokens.json
+
+# Added by nitrostack pack
+.git/
