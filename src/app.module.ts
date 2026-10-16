@@ -6,6 +6,7 @@ import { AnalysisModule } from './modules/analysis/analysis.module.js';
 import { BouncerModule } from './modules/bouncer/bouncer.module.js';
 import { IncidentsModule } from './modules/incidents/incidents.module.js';
 import { RegistryModule } from './modules/registry/registry.module.js';
+import { ObservabilityModule } from './modules/observability/observability.module.js';
 
 /**
  * Root module of the Dep Bouncer MCP server.
@@ -29,6 +30,7 @@ import { RegistryModule } from './modules/registry/registry.module.js';
     RegistryModule,
     AnalysisModule,
     IncidentsModule,
+    ObservabilityModule,
     BouncerModule,
   ],
   providers: [
