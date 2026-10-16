@@ -74,7 +74,9 @@ export class CodeDiffSignal implements Signal {
         }
         scannedBytes += size;
         if (bytes.byteLength > MAX_SOURCE_SCAN) {
-          warn(`${path} too large to scan completely`, [`${bytes.byteLength} bytes; scanned first 2 MB and last 256 KB`]);
+          // Big bundles (typescript.js is ~9 MB) are normal; note the partial scan without risk weight.
+          incomplete.push({ signal: this.id, severity: 'info', title: `Code scanned partially: ${path}`,
+            evidence: [`${bytes.byteLength} bytes; scanned first 2 MB and last 256 KB`], weight: 0 });
           return Buffer.concat([bytes.subarray(0, SOURCE_HEAD), Buffer.from('\n'), bytes.subarray(-SOURCE_TAIL)]);
         }
         return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);

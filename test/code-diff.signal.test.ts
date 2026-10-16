@@ -102,7 +102,8 @@ test('large files report incomplete coverage and scan only their head and tail',
   // A new minified bundle alone is weak evidence (generated parsers, vendored code).
   assert.ok(!result.some(finding => finding.severity === 'high' || finding.severity === 'critical'));
   assert.ok(result.some(finding => finding.evidence.some(item => item.includes('large-minified-file'))));
-  assert.ok(result.some(finding => finding.title === 'Code comparison incomplete: huge.js too large to scan completely' && finding.weight === 15));
+  // Partial scans of big bundles are noted without risk weight (typescript.js is ~9 MB).
+  assert.ok(result.some(finding => finding.title === 'Code scanned partially: huge.js' && finding.weight === 0));
   assert.ok(result.some(finding => finding.evidence.some(item => item.includes('eval(head)'))));
   assert.ok(result.some(finding => finding.evidence.some(item => item.includes('eval(tail)'))));
   assert.ok(!result.some(finding => finding.title.includes('credentials')));
@@ -183,16 +184,16 @@ test('release scan budget covers baseline and target and reports skipped files o
     title: 'Code comparison incomplete: code scan budget exceeded, 1 files not scanned', evidence: [] }]);
 });
 
-test('first-release and baseline oversized coverage warnings retain weight 15', async () => {
+test('oversized files in the target or baseline are noted as partial scans without weight', async () => {
   const huge = Buffer.from((' '.repeat(127) + '\n').repeat(3 * 1024 * 1024 / 128));
   const first = context(files({ 'huge.js': huge }));
   first.baseline = [];
   const result = await signal.evaluate(first);
   assert.equal(result.length, 1);
-  assert.equal(result[0].severity, 'warn');
-  assert.equal(result[0].weight, 15);
+  assert.equal(result[0].severity, 'info');
+  assert.equal(result[0].weight, 0);
   const baselineResult = await signal.evaluate(context(files({ 'index.js': 'export {};' }), files({ 'old.js': huge })));
-  assert.ok(baselineResult.some(f => f.title.includes('old.js too large') && f.weight === 15));
+  assert.ok(baselineResult.some(f => f.title === 'Code scanned partially: old.js' && f.weight === 0));
 });
 
 test('a credential path next to process execution in a new file is high', async () => {

@@ -419,7 +419,7 @@ export class BouncerService {
     const malware = advisories.advisories.filter(a => a.malicious);
     if (malware.length) findings.push(finding('known-advisory', 'critical',
       `Listed as malware in OSV (${malware[0].id})`, malware.map(a => `${a.id}: ${a.summary ?? ''}`)));
-    if (!advisories.available) findings.push(finding('known-advisory', 'high', 'check incomplete: OSV unavailable', [advisories.error ?? 'OSV could not be reached']));
+    if (!advisories.available) findings.push(finding('known-advisory', 'warn', 'check incomplete: OSV unavailable', [advisories.error ?? 'OSV could not be reached']));
     const verdict = decide(findings);
     if (verdict.verdict === 'ALLOW' && findings.some(f => isIncomplete(f.title))) verdict.verdict = 'REVIEW';
     return this.report(packument.name, version, own(packument.time, version), verdict, result.checks, advisories, false);
