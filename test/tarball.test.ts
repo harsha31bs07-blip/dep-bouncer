@@ -75,11 +75,15 @@ test('fetchFiles rejects HTTP errors and streams with oversized declared or actu
     assert.ok(options?.signal instanceof AbortSignal);
     return new Response(archive(entry('package/index.js', 'benign')));
   };
-  assert.equal((await service.fetchFiles('https://fixture.invalid')).size, 1);
+  assert.equal((await service.fetchFiles('https://registry.npmjs.org/fixture/-/fixture-1.0.0.tgz')).size, 1);
   globalThis.fetch = async () => new Response(null, { status: 404 });
-  await assert.rejects(service.fetchFiles('https://fixture.invalid'), /HTTP 404/);
+  await assert.rejects(service.fetchFiles('https://registry.npmjs.org/fixture/-/fixture-1.0.0.tgz'), /HTTP 404/);
   globalThis.fetch = async () => new Response('x', { headers: { 'content-length': String(26 * 1024 * 1024) } });
-  await assert.rejects(service.fetchFiles('https://fixture.invalid'), /25 MB/);
+  await assert.rejects(service.fetchFiles('https://registry.npmjs.org/fixture/-/fixture-1.0.0.tgz'), /25 MB/);
   globalThis.fetch = async () => new Response(new Uint8Array(25 * 1024 * 1024 + 1));
-  await assert.rejects(service.fetchFiles('https://fixture.invalid'), /25 MB/);
+  await assert.rejects(service.fetchFiles('https://registry.npmjs.org/fixture/-/fixture-1.0.0.tgz'), /25 MB/);
+});
+
+test('fetchFiles refuses tarballs outside the npm registry', async () => {
+  await assert.rejects(new TarballService().fetchFiles('https://evil.example/x.tgz'), /Refusing/);
 });
