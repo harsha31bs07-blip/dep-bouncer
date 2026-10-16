@@ -1,6 +1,5 @@
 /**
- * Minimal semver helpers (no dependency): parse, compare, and match the range forms agents
- * actually pass (exact, ^, ~, x-ranges, >=, *).
+ * Semver helpers without a dependency: parse, compare, and expand npm comparator ranges.
  */
 
 export interface SemVer {
@@ -11,11 +10,14 @@ export interface SemVer {
   raw: string;
 }
 
-const SEMVER = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+const SEMVER = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 export function parse(version: string): SemVer | null {
+  if (typeof version !== 'string') return null;
   const m = SEMVER.exec(version.trim());
   if (!m) return null;
+  if (m.slice(1, 4).some(n => !Number.isSafeInteger(Number(n)) || !/^(0|[1-9]\d*)$/.test(n))) return null;
+  if (m[4]?.split('.').some(id => !id || (/^\d+$/.test(id) && id.length > 1 && id[0] === '0'))) return null;
   return {
     major: Number(m[1]),
     minor: Number(m[2]),
@@ -54,67 +56,106 @@ export function compare(a: string, b: string): number {
   return 0;
 }
 
-/**
- * True if `version` satisfies `range`. Supports: '*', '', 'x', exact, '^1.2.3', '~1.2.3',
- * '1', '1.2', '1.x', '1.2.x', '>=1.2.3', '>1.2.3', '<=1.2.3', '<1.2.3', and space-separated
- * conjunctions ('>=1.0.0 <2.0.0'). Prereleases only match ranges that name a prerelease.
- */
+/** npm comparator sets, unions, partials and hyphens. Unsupported syntax fails closed. */
 export function satisfies(version: string, range: string): boolean {
   const v = parse(version);
-  if (!v) return false;
-  const parts = range.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return v.prerelease.length === 0;
-  if (v.prerelease.length && !/-/.test(range)) return false;
-  return parts.every((part) => satisfiesOne(version, part));
+  if (!v || typeof range !== 'string') return false;
+  const sets = range.split('||').map(expandSet);
+  if (sets.some(set => set === null)) return false;
+  if (sets.some(set => set!.some(c => !parse(c.version)))) return false;
+  // npm simplifies a union containing a wildcard to the wildcard alone.
+  if (sets.some(set => set!.length === 0)) return v.prerelease.length === 0;
+  return sets.some(set => set!.every(c => testComparator(version, c))
+    && (!v.prerelease.length || set!.some(c => {
+      const target = parse(c.version)!;
+      return target.prerelease.length > 0 && target.major === v.major
+        && target.minor === v.minor && target.patch === v.patch;
+    })));
 }
 
-function satisfiesOne(version: string, part: string): boolean {
-  if (part === '*' || part === 'x' || part === 'X' || part === 'latest') return true;
-  const op = /^(\^|~|>=|<=|>|<|=)?(.*)$/.exec(part)!;
-  const operator = op[1] ?? '';
-  const body = op[2];
+type Operator = '=' | '>' | '>=' | '<' | '<=';
+interface Comparator { op: Operator; version: string }
+interface PartialVersion { major: number; minor: number; patch: number; count: number; lower: string }
 
-  const wild = /^(\d+)(?:\.(\d+|x|X|\*))?(?:\.(\d+|x|X|\*))?$/.exec(body);
-  if (wild && (wild[2] === undefined || wild[3] === undefined || /[xX*]/.test(body))) {
-    const major = Number(wild[1]);
-    const minor = wild[2] !== undefined && /^\d+$/.test(wild[2]) ? Number(wild[2]) : null;
-    const lower = `${major}.${minor ?? 0}.0`;
-    const upper =
-      minor === null || (operator === '^' && major > 0)
-        ? `${major + 1}.0.0-0`
-        : `${major}.${minor + 1}.0-0`;
-    if (operator === '' || operator === '=' || operator === '^' || operator === '~') {
-      return compare(version, lower) >= 0 && compare(version, upper) < 0;
+function partial(body: string): PartialVersion | null {
+  const full = parse(body);
+  if (full) return { ...full, count: 3, lower: body };
+  const match = /^v?(\d+|[xX*])(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?$/.exec(body);
+  if (!match) return null;
+  const numbers: number[] = [];
+  let wildcard = false;
+  for (const item of match.slice(1)) {
+    if (item === undefined || /^[xX*]$/.test(item)) wildcard = true;
+    else {
+      if (wildcard || !/^(0|[1-9]\d*)$/.test(item) || !Number.isSafeInteger(Number(item))) return null;
+      numbers.push(Number(item));
     }
-    return satisfiesOne(version, `${operator}${lower}`);
   }
+  // A complete numeric version that parse rejected is invalid, not a partial.
+  if (numbers.length === 3) return null;
+  const [major = 0, minor = 0, patch = 0] = numbers;
+  return { major, minor, patch, count: numbers.length, lower: `${major}.${minor}.${patch}` };
+}
 
-  const target = parse(body);
-  if (!target) return false;
-  const c = compare(version, body);
+function upper(p: PartialVersion): string {
+  return p.count <= 1 ? `${p.major + 1}.0.0-0` : `${p.major}.${p.minor + 1}.0-0`;
+}
+
+function expand(operator: string, body: string): Comparator[] | null {
+  const p = partial(body);
+  if (!p) return null;
+  const c = (op: Operator, version: string): Comparator => ({ op, version });
+  if (p.count === 0) return operator === '<' || operator === '>' ? [c('<', '0.0.0-0')] : [];
+  if (operator === '^' || operator === '~') {
+    const limit = operator === '~'
+      ? (p.count === 1 ? `${p.major + 1}.0.0-0` : `${p.major}.${p.minor + 1}.0-0`)
+      : p.major > 0 || p.count === 1 ? `${p.major + 1}.0.0-0`
+        : p.minor > 0 || p.count === 2 ? `0.${p.minor + 1}.0-0` : `0.0.${p.patch + 1}-0`;
+    return [c('>=', p.lower), c('<', limit)];
+  }
+  if (p.count === 3) return [c((operator || '=') as Operator, p.lower)];
   switch (operator) {
-    case '':
-    case '=':
-      return c === 0;
-    case '>':
-      return c > 0;
-    case '>=':
-      return c >= 0;
-    case '<':
-      return c < 0;
-    case '<=':
-      return c <= 0;
-    case '~':
-      return c >= 0 && compare(version, `${target.major}.${target.minor + 1}.0-0`) < 0;
-    case '^': {
-      const upper =
-        target.major > 0
-          ? `${target.major + 1}.0.0-0`
-          : target.minor > 0
-            ? `0.${target.minor + 1}.0-0`
-            : `0.0.${target.patch + 1}-0`;
-      return c >= 0 && compare(version, upper) < 0;
-    }
+    case '': case '=': return [c('>=', p.lower), c('<', upper(p))];
+    case '>': return [c('>=', upper(p).replace(/-0$/, ''))];
+    case '>=': return [c('>=', p.lower)];
+    case '<': return [c('<', `${p.lower}-0`)];
+    case '<=': return [c('<', upper(p))];
+    default: return null;
   }
-  return false;
+}
+
+function expandSet(set: string): Comparator[] | null {
+  const hyphen = /^\s*(\S+)\s+-\s+(\S+)\s*$/.exec(set);
+  if (hyphen) {
+    const a = partial(hyphen[1]);
+    const b = partial(hyphen[2]);
+    if (!a || !b) return null;
+    return [
+      ...(a.count ? [{ op: '>=' as const, version: a.lower }] : []),
+      ...(b.count ? [{ op: b.count === 3 ? '<=' as const : '<' as const,
+        version: b.count === 3 ? b.lower : upper(b) }] : []),
+    ];
+  }
+  const normalized = set.trim().replace(/(>=|<=|>|<|=|\^|~)\s+(?=[v\d*xX])/g, '$1');
+  if (!normalized) return [];
+  const out: Comparator[] = [];
+  for (const token of normalized.split(/\s+/)) {
+    const match = /^(\^|~|>=|<=|>|<|=)?(.+)$/.exec(token);
+    if (!match) return null;
+    const comparators = expand(match[1] ?? '', match[2]);
+    if (!comparators) return null;
+    out.push(...comparators);
+  }
+  return out;
+}
+
+function testComparator(version: string, comparator: Comparator): boolean {
+  const order = compare(version, comparator.version);
+  switch (comparator.op) {
+    case '=': return order === 0;
+    case '>': return order > 0;
+    case '>=': return order >= 0;
+    case '<': return order < 0;
+    case '<=': return order <= 0;
+  }
 }
