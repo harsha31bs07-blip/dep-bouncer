@@ -1,5 +1,7 @@
 import { McpApp, Module, ConfigModule } from '@nitrostack/core';
 import { SystemHealthCheck } from './health/system.health.js';
+import { RegistryHealthCheck } from './health/registry.health.js';
+import { OsvHealthCheck } from './health/osv.health.js';
 import { AnalysisModule } from './modules/analysis/analysis.module.js';
 import { BouncerModule } from './modules/bouncer/bouncer.module.js';
 import { IncidentsModule } from './modules/incidents/incidents.module.js';
@@ -31,6 +33,8 @@ import { RegistryModule } from './modules/registry/registry.module.js';
   ],
   providers: [
     SystemHealthCheck,
+    RegistryHealthCheck,
+    OsvHealthCheck,
   ]
 })
 export class AppModule {}

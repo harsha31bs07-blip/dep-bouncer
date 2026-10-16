@@ -3,6 +3,7 @@ import { AnalysisModule } from '../analysis/analysis.module.js';
 import { IncidentsModule } from '../incidents/incidents.module.js';
 import { RegistryModule } from '../registry/registry.module.js';
 import { BouncerService } from './bouncer.service.js';
+import { ReleaseDiffService } from './release-diff.service.js';
 import { BouncerPrompts } from './bouncer.prompts.js';
 import { BouncerResources } from './bouncer.resources.js';
 import { BouncerTools } from './bouncer.tools.js';
@@ -16,7 +17,7 @@ import { BouncerTools } from './bouncer.tools.js';
   name: 'bouncer',
   description: 'Vet npm releases before an AI agent installs them',
   imports: [RegistryModule, AnalysisModule, IncidentsModule],
-  providers: [BouncerService],
+  providers: [BouncerService, ReleaseDiffService],
   controllers: [BouncerTools, BouncerResources, BouncerPrompts],
 })
 export class BouncerModule {}

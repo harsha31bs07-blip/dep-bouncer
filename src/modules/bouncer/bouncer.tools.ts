@@ -1,5 +1,6 @@
 import { ToolDecorator as Tool, ExecutionContext, Injectable, RateLimit, Widget, z } from '@nitrostack/core';
 import { BouncerService } from './bouncer.service.js';
+import { ReleaseDiffService } from './release-diff.service.js';
 
 const packageName = z
   .string()
@@ -11,9 +12,12 @@ const packageName = z
  * Tools an AI coding agent calls before it runs `npm install`. Each one returns a verdict
  * (ALLOW / REVIEW / BLOCK), the evidence behind it, and what to do instead.
  */
-@Injectable({ deps: [BouncerService] })
+@Injectable({ deps: [BouncerService, ReleaseDiffService] })
 export class BouncerTools {
-  constructor(private readonly bouncer: BouncerService) {}
+  constructor(
+    private readonly bouncer: BouncerService,
+    private readonly releases: ReleaseDiffService,
+  ) {}
 
   @Tool({
     name: 'bouncer_check_package',
@@ -135,6 +139,26 @@ export class BouncerTools {
       },
       () => ctx.task?.isCancelled ?? false,
     );
+  }
+
+  @Tool({
+    name: 'bouncer_diff_release',
+    description:
+      'Raw evidence for humans: what changed between two versions of a package (publisher, provenance, install scripts, dependencies, files added/removed/changed, and risky code patterns new in this release). Use it to explain a REVIEW or BLOCK.',
+    inputSchema: z.object({
+      name: packageName,
+      from: z.string().max(64).describe('Older version'),
+      to: z.string().max(64).describe('Newer version'),
+    }),
+    annotations: { readOnlyHint: true, openWorldHint: true },
+    examples: {
+      request: { name: 'chalk', from: '5.5.0', to: '5.6.0' },
+    },
+  })
+  @RateLimit({ requests: 20, window: '1m', message: 'Too many diffs; wait a minute.' })
+  async diffRelease(input: { name: string; from: string; to: string }, ctx: ExecutionContext) {
+    ctx.logger.info('diff_release', input);
+    return this.releases.diff(input.name.trim(), input.from.trim(), input.to.trim());
   }
 
   @Tool({
