@@ -63,6 +63,22 @@ or refuses (BLOCK). The `safe_install` prompt teaches any agent that loop.
 | `safe_install` (prompt) | Rules that make an agent call Dep Bouncer before every dependency change and act on the verdict. |
 | `verdict-card` (widget) | Visual verdict with evidence, the "what other checks say" panel and a one-click "use the safe version". |
 
+## Agent guard: no install without a check
+
+Agents forget to call tools. [`guard/`](guard/README.md) is a hook for **Claude Code**
+(`PreToolUse`) and **Cursor** (`beforeShellExecution`) that intercepts the agent's own terminal
+commands (`npm i`, `pnpm add`, `yarn add`, `bun add`, `npx`, `pnpm dlx`, ...), asks Dep Bouncer
+about each package, and **denies** BLOCK, **asks the user** on REVIEW, allows the rest.
+
+Tested with a real headless Claude Code session asked to
+`npm install react-codeshift-utils-pro chalk`: the hook denied the command ("does not exist on
+npm"), the agent verified, did not work around the block, and installed only `chalk`.
+
+```json
+{ "hooks": { "PreToolUse": [ { "matcher": "Bash", "hooks": [
+  { "type": "command", "command": "node /path/to/dep-bouncer/guard/dep-bouncer-guard.mjs" } ] } ] } }
+```
+
 ## How it decides
 
 | Signal | Looks for | Caught |
