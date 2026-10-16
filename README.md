@@ -2,6 +2,32 @@
 
 **`npm install`, reimagined for AI agents.**
 
+[![Built with NitroStack](https://img.shields.io/badge/Built_with-NitroStack-7c3aed)](https://nitrostack.ai) ![MCP](https://img.shields.io/badge/MCP-2563eb) [![Live on NitroCloud](https://img.shields.io/badge/Live_on-NitroCloud-22c55e)](https://dep-bouncer-6ad22414-giberelin-heapify-global-community.app.nitrocloud.ai/mcp) ![tests 191 passing](https://img.shields.io/badge/tests-191_passing-22c55e) [![benchmark 5/5 hijacks blocked](https://img.shields.io/badge/benchmark-5%2F5_hijacks_blocked-22c55e)](bench/RESULTS.md) [![0 false BLOCK on top 200](https://img.shields.io/badge/0_false_BLOCK-on_top_200-22c55e)](bench/RESULTS.md) ![license MIT](https://img.shields.io/badge/license-MIT-blue) [![CI](https://github.com/harsha31bs07-blip/dep-bouncer/actions/workflows/ci.yml/badge.svg)](https://github.com/harsha31bs07-blip/dep-bouncer/actions/workflows/ci.yml)
+
+![Before vs after](docs/img/hero.svg)
+
+## Try it in 30 seconds
+
+Add this live URL as a remote MCP server in your client:
+
+`https://dep-bouncer-6ad22414-giberelin-heapify-global-community.app.nitrocloud.ai/mcp`
+
+Then ask: *"Use the safe_install prompt, then add axios to this project."*
+
+Or replay the axios incident directly (Bash / zsh):
+
+```bash
+curl -X POST 'https://dep-bouncer-6ad22414-giberelin-heapify-global-community.app.nitrocloud.ai/mcp' \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -H 'mcp-protocol-version: 2025-06-18' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"bouncer_replay_incident","arguments":{"incident":"axios"}}}'
+```
+
+**Works with:** NitroChat ([screenshots below](#before--after)); Claude Code + Cursor
+([guard hooks](guard/README.md)); any remote MCP client via the URL (Claude, ChatGPT, Cursor,
+NitroStudio).
+
 Dep Bouncer is an MCP server an AI coding agent calls *before* it installs or upgrades an npm
 package. It compares the release with **the package's own history** (who published it, whether
 CI signed it, what runs at install time, which dependencies appeared, what code changed) and
@@ -219,6 +245,11 @@ No environment variables are required. Optional (see `.env.example`): `MCP_TRANS
   provenance, script and dependency signals still apply. Tarballs over 25 MB (e.g. `next`) skip
   the code diff and say so.
 - npm only. Next: PyPI, lockfile/CI mode, org policies (e.g. "always REVIEW new publishers").
+
+## Built with AI assistance
+
+Harsha B S designed and directed the project. Claude Code and OpenAI Codex helped write and
+review code; every change was reviewed and tested. See [the architecture walkthrough](docs/ARCHITECTURE.md).
 
 ## Team
 
