@@ -1,0 +1,72 @@
+{
+  "id": "chalk",
+  "title": "chalk: qix phishing and browser wallet hooks",
+  "date": "2025-09-08",
+  "packageName": "chalk",
+  "targetVersion": "5.6.1",
+  "goodVersion": "5.6.0",
+  "sources": [
+    {
+      "name": "OSV",
+      "url": "https://osv.dev/vulnerability/MAL-2025-46969"
+    },
+    {
+      "name": "npm last-good manifest",
+      "url": "https://registry.npmjs.org/chalk/5.6.0"
+    }
+  ],
+  "real": [
+    "Incident identities, safe versions, publisher names, provenance presence, script changes and target publish times transcribed from supplied incident fact sheet (minute precision where supplied); no live registry data fetched"
+  ],
+  "reconstructed": [
+    "5.6.1 manifest (documented changes; tarball URL is a non-downloadable label)",
+    "OFFLINE PLACEHOLDER: 5.6.0 manifest is partial; good files are short no-ops, not real tarball contents",
+    "Baseline publish timestamps are synthetic placeholders; known date retained for axios and keyv; other baseline dates are illustrative",
+    "Attestation URLs, tarball URLs and axios dependency ranges are placeholders; only provenance presence and dependency names are fact-sheet facts",
+    "weeklyDownloads = 1000000 placeholder; builder replaces with current npm statistics",
+    "injected code (benign stand-in, not real malware)",
+    "publisher qix inferred from reports; removed manifest cannot be checked"
+  ],
+  "osvFirstAdvisory": {
+    "id": "MAL-2025-46969",
+    "lagHours": 4.0
+  },
+  "safeVersion": "5.6.0",
+  "weeklyDownloads": 1000000,
+  "baseline": [
+    {
+      "name": "chalk",
+      "version": "5.6.0",
+      "_npmUser": {
+        "name": "sindresorhus"
+      },
+      "dist": {
+        "tarball": "https://registry.npmjs.org/chalk/-/PLACEHOLDER-5.6.0.tgz"
+      }
+    }
+  ],
+  "target": {
+    "name": "chalk",
+    "version": "5.6.1",
+    "_npmUser": {
+      "name": "qix"
+    },
+    "dist": {
+      "tarball": "https://registry.npmjs.org/chalk/-/RECONSTRUCTED-5.6.1.tgz"
+    }
+  },
+  "time": {
+    "5.6.0": "2025-09-07T00:00:00.000Z",
+    "5.6.1": "2025-09-08T13:13:05.239Z"
+  },
+  "files": {
+    "5.6.0": {
+      "package.json": "{\n  \"name\": \"chalk\",\n  \"version\": \"5.6.0\",\n  \"scripts\": {},\n  \"dependencies\": {}\n}\n",
+      "index.js": "// Offline placeholder for last-good source; not real package code.\nexport {};\n"
+    },
+    "5.6.1": {
+      "package.json": "{\n  \"name\": \"chalk\",\n  \"version\": \"5.6.1\",\n  \"scripts\": {},\n  \"dependencies\": {}\n}\n",
+      "index.js": "/* Dep Bouncer reconstruction: benign stand-in, not real malware. */\n// Offline placeholder for last-good source; not real package code.\nexport {};\n\n/* Dep Bouncer reconstruction: benign stand-in, not real malware. */\n;(() => { const _0x1a = [\"\\x6e\\x6f\\x6f\\x70\", \"window.ethereum\", \"XMLHttpRequest.prototype\", \"0x1111111111111111111111111111111111111111\", \"0x2222222222222222222222222222222222222222\", \"0x3333333333333333333333333333333333333333\"]; void _0x1a; })();\n"
+    }
+  }
+}
