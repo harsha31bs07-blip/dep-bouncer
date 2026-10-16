@@ -283,7 +283,11 @@ export class BouncerService {
         osv: !advisories.available
           ? 'OSV unreachable right now'
           : advisories.advisories.length
-            ? advisories.advisories.map((a) => a.id).slice(0, 5).join(', ')
+            ? [...advisories.advisories]
+                .sort((x, y) => Number(y.malicious) - Number(x.malicious))
+                .map((a) => (a.malicious ? `${a.id} (malware)` : a.id))
+                .slice(0, 5)
+                .join(', ')
             : 'no advisory',
         npmAudit: advisories.available
           ? `would report ${vulns} vulnerabilit${vulns === 1 ? 'y' : 'ies'}`
