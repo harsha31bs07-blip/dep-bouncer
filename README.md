@@ -6,6 +6,10 @@
 
 ![Before vs after](docs/img/hero.svg)
 
+[![Watch the 2:32 demo film](docs/img/video-thumbnail.png)](https://youtu.be/w9Ax5KPUGD8)
+
+**▶ Watch the demo film (2:32):** https://youtu.be/w9Ax5KPUGD8
+
 ## Try it in 30 seconds
 
 Add this live URL as a remote MCP server in your client:
@@ -39,7 +43,7 @@ CI signed it, what runs at install time, which dependencies appeared, what code 
 returns **ALLOW / REVIEW / BLOCK** with the evidence, plus **the version to install instead**.
 
 - **Live MCP endpoint:** `https://dep-bouncer-6ad22414-giberelin-heapify-global-community.app.nitrocloud.ai/mcp`
-- **Demo video:** _link coming_
+- **Demo video (2:32):** https://youtu.be/w9Ax5KPUGD8
 - **Track:** Developer Tools · **Product reimagined:** npm (`npm install` / `npm audit`)
 - Built with [NitroStack](https://nitrostack.ai), deployed on NitroCloud.
 
