@@ -1,18 +1,15 @@
 import { Injectable } from '@nitrostack/core';
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import type { AnalysisContext, Finding, Signal } from '../signal.js';
 import { SEVERITY_WEIGHT } from '../signal.js';
 import { findLookalikes } from '../name-similarity.js';
-
-const popularUrl = new URL('../data/popular-packages.json', import.meta.url);
+import { loadPopularPackages } from '../popular-packages.js';
 
 @Injectable()
 export class NameCheckSignal implements Signal {
   readonly id = 'name-check';
 
   async evaluate(ctx: AnalysisContext): Promise<Finding[]> {
-    const popular = JSON.parse(await readFile(fileURLToPath(popularUrl), 'utf8')) as string[];
+    const popular = await loadPopularPackages();
     const [match] = findLookalikes(ctx.name, popular);
     if (!match) return [];
     const createdMs = ctx.time.created ? Date.parse(ctx.time.created) : Number.NaN;

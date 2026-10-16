@@ -11,7 +11,7 @@ const header = '/* Dep Bouncer reconstruction: benign stand-in, not real malware
 const ids = ['axios', 'keyv', 'nx', 'chalk', 'tinycolor'];
 const standInPaths: Record<string, string[]> = {
   axios: [], keyv: ['setup.mjs', 'Math_Symbol.js'], nx: ['telemetry.js'],
-  chalk: ['index.js'], tinycolor: ['bundle.js'],
+  chalk: ['source/index.js'], tinycolor: ['bundle.js'],
 };
 
 test('all five fixtures parse and disclose sources and reconstruction', () => {
@@ -60,7 +60,9 @@ for (const id of ids) {
     }
     const target = await context.loadFiles(incident.targetVersion);
     for (const path of standInPaths[id]) {
-      assert.ok(new TextDecoder().decode(target.get(path)).startsWith(header), `${id}/${path} must be labelled`);
+      // chalk's stand-in is appended to the real entry file, as the real injection was.
+      const text = new TextDecoder().decode(target.get(path));
+      assert.ok(id === 'chalk' ? text.includes(header) : text.startsWith(header), `${id}/${path} must be labelled`);
     }
     await assert.rejects(context.loadFiles('missing-version'), /Files unavailable/);
     assert.equal(await context.lookupPackage?.('unrelated-package'), null);
@@ -114,8 +116,8 @@ test('reconstructed traits preserve each incident distinction and safe version',
   assert.equal(chalk.safeVersion, '5.6.0');
   assert.equal(chalk.target._npmUser?.name, 'qix');
   assert.equal(chalk.target.scripts?.postinstall, undefined);
-  for (const trait of ['_0x', '\\x6e', 'window.ethereum', 'XMLHttpRequest.prototype']) assert.ok(chalk.files[chalk.targetVersion]['index.js'].includes(trait), trait);
-  assert.equal(chalk.files[chalk.targetVersion]['index.js'].match(/0x[123]{40}/g)?.length, 3);
+  for (const trait of ['_0x', '\\x6e', 'window.ethereum', 'XMLHttpRequest.prototype']) assert.ok(chalk.files[chalk.targetVersion]['source/index.js'].includes(trait), trait);
+  assert.equal(chalk.files[chalk.targetVersion]['source/index.js'].match(/0x[123]{40}/g)?.length, 3);
 
   const tinycolor = service.get('tinycolor');
   assert.equal(tinycolor.safeVersion, '4.1.0');

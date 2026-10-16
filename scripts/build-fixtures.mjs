@@ -41,6 +41,23 @@ function paddedComment(prefix, size) {
   return prefix + '/*' + ' harmless reconstruction padding '.repeat(Math.ceil(size / 33)).slice(0, size - Buffer.byteLength(prefix) - 4) + '*/';
 }
 
+/**
+ * A benign no-op with the *shape* of the 2025 chalk/debug injection: one long line, dozens of
+ * `_0x`-style identifiers, a hex-escaped string table and the hooked API names as plain
+ * strings. It never touches window, fetch or wallets; it only returns harmless strings.
+ */
+function obfuscatedStandIn() {
+  const ids = Array.from({ length: 40 }, (_, i) => '_0x' + (0x1a2b3 + i * 7919).toString(16));
+  const words = ['noop', 'harmless', 'reconstruction', 'benign', 'stand-in', 'not-malware'];
+  const hex = (w) => [...w].map((c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+  const table = `const ${ids[0]}=[${Array.from({ length: 60 }, (_, i) => `"${hex(words[i % words.length])}"`).join(',')}];`;
+  const fns = ids.slice(1).map((id, i) => `function ${id}(${ids[(i + 2) % ids.length]}){return ${ids[0]}[${i % 60}];}`).join('');
+  const names = ['window.ethereum', 'ethereum.request', 'XMLHttpRequest.prototype.open', 'XMLHttpRequest.prototype.send',
+    'solana.signTransaction', '0x1111111111111111111111111111111111111111', '0x2222222222222222222222222222222222222222',
+    '0x3333333333333333333333333333333333333333'];
+  return `${HEADER}\n;(()=>{${table}${fns}void [${names.map((n) => `"${n}"`).join(',')}];})();\n`;
+}
+
 export function standIns(id) {
   if (id === 'keyv') {
     let seed = 0x5eed1234;
@@ -61,9 +78,7 @@ export function standIns(id) {
   if (id === 'nx') return {
     'telemetry.js': `${HEADER}\nvoid ["child_process", "claude --dangerously-skip-permissions", "gemini --yolo", "q --trust-all-tools", ".ssh", ".npmrc", "api.github.com/user/repos", ".bashrc"];\n`,
   };
-  if (id === 'chalk') return {
-    'index.js': `${HEADER}\n;(() => { const _0x1a = ["\\x6e\\x6f\\x6f\\x70", "window.ethereum", "XMLHttpRequest.prototype", "0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222", "0x3333333333333333333333333333333333333333"]; void _0x1a; })();\n`,
-  };
+  if (id === 'chalk') return { 'index.js': obfuscatedStandIn() };
   if (id === 'tinycolor') {
     const prefix = `${HEADER}\nvoid ["trufflehog", "webhook.site", "JSON.stringify(process.env)", ".github/workflows"];`;
     const unit = '(()=>{const harmless="reconstruction";void harmless;})();';
@@ -92,7 +107,13 @@ export function reconstruct(spec, good, goodFiles) {
   }
   const additions = standIns(spec.id);
   const files = { ...goodFiles, ...additions };
-  if (spec.id === 'chalk') files['index.js'] = `${HEADER}\n${goodFiles['index.js'] ?? ''}\n${additions['index.js']}`;
+  if (spec.id === 'chalk') {
+    // The real injection went into the package's main entry file, so append it there.
+    const pkg = goodFiles['package.json'] ? JSON.parse(goodFiles['package.json']) : {};
+    const entry = String(typeof pkg.exports === 'string' ? pkg.exports : pkg.main ?? 'index.js').replace(/^\.\//, '');
+    delete files['index.js'];
+    files[entry] = `${goodFiles[entry] ?? ''}\n${additions['index.js']}`;
+  }
   // axios deliberately has byte-identical files: the registry manifest adds the dependency.
   if (spec.id !== 'axios' && goodFiles['package.json']) {
     const manifest = JSON.parse(goodFiles['package.json']);

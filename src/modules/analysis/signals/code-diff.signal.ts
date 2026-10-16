@@ -77,6 +77,13 @@ export class CodeDiffSignal implements Signal {
         }
         hits = hits.filter((hit, index) => hits.findIndex(other => other.id === hit.id) === index)
           .filter(hit => kind === 'added' || (hit.id !== 'native-install' && hit.id !== 'packed-payload'));
+        if (kind === 'changed' && (js || referenced)) {
+          // Only what this release introduced: a pattern the previous version of the same file
+          // already had (e.g. a bundled fetch polyfill) is not evidence of a hijack.
+          const old = baseline.get(path)!;
+          const before = new Set(scanSource(path, Buffer.from(old).toString('utf8')).map(hit => hit.id));
+          hits = hits.filter(hit => !before.has(hit.id));
+        }
         if (kind === 'added' && js && bytes.byteLength > 500 * 1024
           && isMinified(Buffer.from(bytes).toString('utf8'))) {
           hits.push({ id: 'large-minified-file', category: 'obfuscation', severity: 'high',

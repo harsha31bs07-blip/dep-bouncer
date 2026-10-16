@@ -1,5 +1,6 @@
 import { Injectable } from '@nitrostack/core';
 import { readFileSync } from 'node:fs';
+import { assetPath } from '../shared/assets.js';
 import type { AnalysisContext, PackageInfo, VersionManifest } from '../analysis/signal.js';
 
 export interface IncidentSummary {
@@ -25,13 +26,13 @@ export interface Incident extends IncidentSummary {
   packages?: Record<string, PackageInfo>;
 }
 
-const fixtureDirectory = new URL('./fixtures/', import.meta.url);
+
 const incidentIds = ['axios', 'keyv', 'nx', 'chalk', 'tinycolor'];
 
 @Injectable()
 export class IncidentsService {
   private readonly incidents = new Map<string, Incident>(incidentIds.map((id) => [
-    id, JSON.parse(readFileSync(new URL(`${id}.json`, fixtureDirectory), 'utf8')) as Incident,
+    id, JSON.parse(readFileSync(assetPath(`modules/incidents/fixtures/${id}.json`), 'utf8')) as Incident,
   ]));
 
   list(): IncidentSummary[] {

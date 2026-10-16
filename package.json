@@ -12,8 +12,9 @@
     "upgrade": "nitrostack-cli upgrade",
     "install:all": "nitrostack-cli install",
     "widget": "npm --prefix src/widgets",
-    "test": "tsx --test \"test/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "test": "node --import tsx --test --test-force-exit --test-timeout=60000 \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "postbuild": "node scripts/copy-assets.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.0.0",
