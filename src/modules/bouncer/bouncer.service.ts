@@ -85,7 +85,10 @@ export class PackageNotFoundError extends Error {}
  */
 @Injectable({ deps: [NpmRegistryService, TarballService, OsvService, AnalysisService, IncidentsService] })
 export class BouncerService {
-  private readonly files = new TtlCache<FileMap>(10 * 60_000, 12);
+  private readonly files = new TtlCache<FileMap>(10 * 60_000, 12, {
+    maxBytes: 192 * 1024 * 1024,
+    sizeOf: files => [...files.values()].reduce((bytes, file) => bytes + file.byteLength, 0),
+  });
 
   constructor(
     private readonly registry: NpmRegistryService,
@@ -99,31 +102,9 @@ export class BouncerService {
   async checkPackage(name: string, version?: string): Promise<Report> {
     const packument = await this.registry.getPackument(name);
     if (!packument) return this.notFound(name);
-    if (isSecurityHolder(packument)) return this.securityHolder(packument);
-    const resolved = this.resolveVersion(packument, version);
-    const manifest = packument.versions[resolved];
-    if (!manifest) {
-      const report = this.removed(packument, resolved, await this.osv.query(name, resolved));
-      report.safeVersion = await this.findSafeVersion(packument, `<${resolved}`, resolved);
-      return report;
-    }
-
-    const ctx = await this.liveContext(packument, manifest);
-    const [result, advisories] = await Promise.all([
-      this.analysis.analyze(ctx),
-      this.osv.query(name, resolved),
-    ]);
-
-    const findings = [...result.findings, ...result.notes];
-    const malware = advisories.advisories.filter((a) => a.malicious);
-    if (malware.length) {
-      findings.push(
-        finding('known-advisory', 'critical', `Listed as malware in OSV (${malware[0].id})`, malware.map((a) => `${a.id}: ${a.summary ?? ''}`)),
-      );
-    }
-    const verdict = decide(findings);
-    const report = this.report(name, resolved, packument.time[resolved], verdict, result.checks, advisories, false);
-    if (verdict.verdict !== 'ALLOW') {
+    const resolved = isSecurityHolder(packument) ? Object.keys(packument.versions)[0] : this.resolveVersion(packument, version);
+    const report = await this.checkRelease(packument, resolved);
+    if (report.verdict !== 'ALLOW') {
       report.safeVersion = await this.findSafeVersion(packument, `<${resolved}`, resolved);
     }
     return report;
@@ -174,13 +155,14 @@ export class BouncerService {
     } catch {
       throw new Error('packageJson is not valid JSON');
     }
-    const sections = ['dependencies', 'optionalDependencies', ...(includeDev ? ['devDependencies'] : [])];
+    if (!isPlainObject(manifest)) throw new Error('packageJson must be a JSON object');
+    const sections = [...(includeDev ? ['devDependencies'] : []), 'dependencies', 'optionalDependencies'];
     const deps = new Map<string, string>();
     for (const section of sections) {
       const entries = manifest[section];
-      if (entries && typeof entries === 'object') {
+      if (isPlainObject(entries)) {
         for (const [name, range] of Object.entries(entries as Record<string, unknown>)) {
-          if (typeof range === 'string' && !deps.has(name)) deps.set(name, range);
+          if (typeof range === 'string') deps.set(name, range);
         }
       }
     }
@@ -189,11 +171,12 @@ export class BouncerService {
     const results: ManifestEntry[] = new Array(todo.length);
     let done = 0;
     let next = 0;
+    let wasCancelled = false;
     progress(`Checking ${todo.length} dependencies${all.length > todo.length ? ` (first ${todo.length} of ${all.length})` : ''}...`);
 
     const worker = async () => {
       while (next < todo.length) {
-        if (cancelled()) return;
+        if (cancelled()) { wasCancelled = true; return; }
         const i = next++;
         const [name, range] = todo[i];
         results[i] = await this.checkDependency(name, range);
@@ -209,41 +192,51 @@ export class BouncerService {
     finished.sort((a, b) => rank[a.verdict] - rank[b.verdict] || a.name.localeCompare(b.name));
     const count = (v: ManifestEntry['verdict']) => finished.filter((r) => r.verdict === v).length;
     const counts = { BLOCK: count('BLOCK'), REVIEW: count('REVIEW'), ALLOW: count('ALLOW'), SKIPPED: count('SKIPPED') };
+    const truncated = all.length > todo.length;
+    wasCancelled = wasCancelled || cancelled();
     return {
-      verdict: counts.BLOCK ? 'BLOCK' : counts.REVIEW ? 'REVIEW' : 'ALLOW',
-      summary: `${finished.length} dependencies checked: ${counts.BLOCK} BLOCK, ${counts.REVIEW} REVIEW, ${counts.ALLOW} ALLOW, ${counts.SKIPPED} skipped`,
+      verdict: counts.BLOCK ? 'BLOCK' : counts.REVIEW || truncated || wasCancelled ? 'REVIEW' : 'ALLOW',
+      summary: `${finished.length} dependencies checked: ${counts.BLOCK} BLOCK, ${counts.REVIEW} REVIEW, ${counts.ALLOW} ALLOW, ${counts.SKIPPED} skipped${truncated ? '; dependency cap reached' : ''}${wasCancelled ? '; check cancelled' : ''}`,
       counts,
-      truncated: all.length > todo.length,
-      cancelled: cancelled(),
+      truncated,
+      cancelled: wasCancelled,
       results: finished,
     };
   }
 
   private async checkDependency(name: string, range: string): Promise<ManifestEntry> {
-    if (/^(?:file:|link:|workspace:|git\+|git:|github:|https?:|npm:)/.test(range) || range.includes('/')) {
+    let registryName = name;
+    let registryRange = range.trim();
+    if (registryRange.startsWith('npm:')) {
+      const alias = /^npm:((?:@[^/\s]+\/)?[^@/\s]+)(?:@(.+))?$/.exec(registryRange);
+      if (!alias) return { name, range, verdict: 'REVIEW', reason: 'invalid npm alias' };
+      registryName = alias[1];
+      registryRange = alias[2] ?? '*';
+    } else if (/^(?:file:|link:|workspace:|git\+|git:|git@|github:|gitlab:|bitbucket:|ssh:|https?:)/.test(registryRange) || registryRange.includes('/')) {
       return { name, range, verdict: 'SKIPPED', reason: 'not a plain npm registry range' };
     }
     try {
       assertValidName(name);
-      const packument = await this.registry.getPackument(name);
+      assertValidName(registryName);
+      const packument = await this.registry.getPackument(registryName);
       if (!packument) {
-        return { name, range, verdict: 'BLOCK', score: 70, reason: `${name} does not exist on npm` };
+        return { name, range, verdict: 'BLOCK', score: 70, reason: `${registryName} does not exist on npm` };
       }
       if (isSecurityHolder(packument)) {
-        return { name, range, verdict: 'BLOCK', score: 70, reason: `npm replaced ${name} with a security placeholder: it was malware` };
+        return { name, range, verdict: 'BLOCK', score: 70, reason: `npm replaced ${registryName} with a security placeholder: it was malware` };
       }
-      const resolved = this.candidates(packument, range === '' ? '*' : range)[0];
+      const resolved = this.candidates(packument, registryRange)[0];
       if (!resolved) {
         return { name, range, verdict: 'REVIEW', reason: `no published version matches ${range}` };
       }
-      const report = await this.checkPackage(name, resolved);
+      const report = await this.checkPackage(registryName, resolved);
       return {
         name,
         range,
         resolved,
         verdict: report.verdict,
         score: report.score,
-        reason: report.findings[0]?.title ?? 'no risk signals',
+        reason: `${registryName !== name ? `alias for ${registryName}@${resolved}: ` : ''}${report.findings[0]?.title ?? report.notes.find(isIncomplete) ?? 'no risk signals'}`,
         safeVersion: report.safeVersion?.version,
       };
     } catch (err) {
@@ -254,22 +247,37 @@ export class BouncerService {
   private async reviewOne(name: string, version?: string): Promise<ScriptReview> {
     const report = await this.checkPackage(name, version);
     const packument = await this.registry.getPackument(name);
-    const manifest = packument?.versions[report.version];
+    const manifest = packument ? own(packument.versions, report.version) : undefined;
     const scripts: Record<string, string> = {};
     for (const hook of ['preinstall', 'install', 'postinstall'] as const) {
       const s = manifest?.scripts?.[hook];
       if (s) scripts[hook] = s;
     }
     const base = { package: name, version: report.version, scripts };
+    let implicitNative = false;
+    let nativeError: string | undefined;
+    if (manifest && !manifest.scripts?.install && !manifest.scripts?.preinstall) {
+      try {
+        implicitNative = (await this.loadFiles(packument!, report.version)).has('binding.gyp');
+        if (implicitNative) scripts.install = 'node-gyp rebuild';
+      } catch (err) {
+        nativeError = `could not check for implicit native install: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+    const nativeNote = 'root binding.gyp triggers npm\'s implicit node-gyp rebuild install script';
     if (report.verdict === 'BLOCK') {
       return {
         ...base,
         recommendation: 'DENY',
-        reasons: report.findings.slice(0, 3).map((f) => f.title),
+        reasons: [...report.findings.slice(0, 3).map((f) => f.title), ...(implicitNative ? [nativeNote] : []), ...(nativeError ? [nativeError] : [])],
         safeVersion: report.safeVersion?.version,
       };
     }
+    if (nativeError) return { ...base, recommendation: 'REVIEW', reasons: [nativeError] };
     if (Object.keys(scripts).length === 0) {
+      if (report.verdict === 'REVIEW') {
+        return { ...base, recommendation: 'REVIEW', reasons: [...report.findings.map(f => f.title), ...report.notes].slice(0, 3) };
+      }
       return { ...base, recommendation: 'NO_SCRIPTS', reasons: ['this release runs nothing at install time'] };
     }
     const scriptFindings = report.findings.filter((f) => f.signal === 'install-script' || f.signal === 'code-diff');
@@ -277,11 +285,27 @@ export class BouncerService {
       return {
         ...base,
         recommendation: 'REVIEW',
-        reasons: (scriptFindings.length ? scriptFindings : report.findings).slice(0, 3).map((f) => f.title),
+        reasons: [...(implicitNative ? [nativeNote] : []),
+          ...(scriptFindings.length ? scriptFindings : report.findings).slice(0, 3).map((f) => f.title),
+          ...report.notes.filter(isIncomplete)].slice(0, 4),
       };
     }
     // Same script as the releases before it, from the same kind of publisher, no new code risk.
     const previous = this.baselineFor(packument!, report.version).slice(0, 3);
+    if (implicitNative) {
+      try {
+        const prior = previous[0];
+        const stable = report.findings.length === 0 && prior && !prior.scripts?.install && !prior.scripts?.preinstall
+          && (await this.loadFiles(packument!, prior.version)).has('binding.gyp')
+          && Object.entries(scripts).filter(([hook]) => hook !== 'install').every(([hook, cmd]) => prior.scripts?.[hook] === cmd);
+        return { ...base, recommendation: stable ? 'APPROVE' : 'REVIEW', reasons: [
+          nativeNote,
+          stable ? `the previous release ${prior.version} also contains binding.gyp; no risk signals` : 'the native build is new or has no verified baseline; check what it runs',
+        ] };
+      } catch (err) {
+        return { ...base, recommendation: 'REVIEW', reasons: [`implicit node-gyp rebuild; previous release could not be checked: ${err instanceof Error ? err.message : String(err)}`] };
+      }
+    }
     const stable = previous.length > 0 && previous.every((m) =>
       Object.entries(scripts).every(([hook, cmd]) => m.scripts?.[hook] === cmd),
     );
@@ -302,13 +326,15 @@ export class BouncerService {
   async checkUpgrade(name: string, from: string, to: string): Promise<Report & { change: string[] }> {
     const report = await this.checkPackage(name, to);
     const packument = await this.registry.getPackument(name);
-    const a = packument?.versions[from];
-    const b = packument?.versions[to];
+    const a = packument ? own(packument.versions, from) : undefined;
+    const b = packument ? own(packument.versions, to) : undefined;
     const change: string[] = [];
     if (!a) change.push(`${from} is not on the registry`);
     if (a && b) change.push(...describeChange(a, b));
-    if (packument?.time[from] && packument.time[to]) {
-      change.push(`${to} was published ${formatAge(Math.abs(hoursBetween(packument.time[from], packument.time[to])))} after ${from}`);
+    const timeFrom = packument ? own(packument.time, from) : undefined;
+    const timeTo = packument ? own(packument.time, to) : undefined;
+    if (timeFrom && timeTo) {
+      change.push(`${to} was published ${formatAge(Math.abs(hoursBetween(timeFrom, timeTo)))} after ${from}`);
     }
     return { ...report, change };
   }
@@ -327,11 +353,11 @@ export class BouncerService {
     const skipped: { version: string; verdict: Verdict; reason: string }[] = [];
     const candidates = this.candidates(packument, range);
     for (const v of candidates.slice(0, SAFE_VERSION_ATTEMPTS)) {
-      const r = await this.checkLive(packument, v);
-      if (r.verdict === 'ALLOW') {
+      const r = await this.checkRelease(packument, v);
+      if (isSafe(r)) {
         return { package: name, range, safeVersion: v, verdict: r.verdict, skipped };
       }
-      skipped.push({ version: v, verdict: r.verdict, reason: r.findings[0]?.title ?? r.verdict });
+      skipped.push({ version: v, verdict: r.verdict, reason: r.findings[0]?.title ?? r.notes.find(isIncomplete) ?? r.verdict });
     }
     return {
       package: name,
@@ -353,7 +379,7 @@ export class BouncerService {
     const report = this.report(
       incident.packageName,
       incident.targetVersion,
-      ctx.time[incident.targetVersion],
+      own(ctx.time, incident.targetVersion),
       verdict,
       result.checks,
       advisories,
@@ -379,9 +405,24 @@ export class BouncerService {
     return this.incidents.list();
   }
 
-  private async checkLive(packument: Packument, version: string) {
-    const manifest = packument.versions[version];
-    return this.analysis.analyze(await this.liveContext(packument, manifest));
+  /** One non-recursive check for every release, including fallback candidates. */
+  private async checkRelease(packument: Packument, version: string): Promise<Report> {
+    if (isSecurityHolder(packument)) return this.securityHolder(packument);
+    const manifest = own(packument.versions, version);
+    if (!manifest) return this.removed(packument, version, await this.osv.query(packument.name, version));
+    const ctx = await this.liveContext(packument, manifest);
+    const [result, advisories] = await Promise.all([
+      this.analysis.analyze(ctx),
+      this.osv.query(packument.name, version),
+    ]);
+    const findings = [...result.findings, ...result.notes];
+    const malware = advisories.advisories.filter(a => a.malicious);
+    if (malware.length) findings.push(finding('known-advisory', 'critical',
+      `Listed as malware in OSV (${malware[0].id})`, malware.map(a => `${a.id}: ${a.summary ?? ''}`)));
+    if (!advisories.available) findings.push(finding('known-advisory', 'high', 'check incomplete: OSV unavailable', [advisories.error ?? 'OSV could not be reached']));
+    const verdict = decide(findings);
+    if (verdict.verdict === 'ALLOW' && findings.some(f => isIncomplete(f.title))) verdict.verdict = 'REVIEW';
+    return this.report(packument.name, version, own(packument.time, version), verdict, result.checks, advisories, false);
   }
 
   private async liveContext(packument: Packument, target: VersionManifest): Promise<AnalysisContext> {
@@ -392,7 +433,12 @@ export class BouncerService {
       baseline: this.baseline(packument, target.version),
       time: packument.time,
       loadFiles: (version) => this.loadFiles(packument, version),
-      lookupPackage: (dep) => this.registry.lookupPackage(dep),
+      lookupPackage: async (dep, range) => {
+        const info = await this.registry.lookupPackage(dep, range);
+        if (!info?.resolved) return info;
+        const advisories = await this.osv.query(dep, info.resolved.version);
+        return { ...info, knownMalicious: advisories.advisories.some(a => a.malicious) };
+      },
     };
   }
 
@@ -401,23 +447,23 @@ export class BouncerService {
    * compared with 0.x, not with 1.x), then the rest; prereleases only for prerelease targets.
    */
   private baseline(packument: Packument, version: string): VersionManifest[] {
-    const published = Date.parse(packument.time[version] ?? '');
+    const published = Date.parse(own(packument.time, version) ?? '');
     const pre = isPrerelease(version);
     const major = parse(version)?.major;
     const earlier = Object.keys(packument.versions)
-      .filter((v) => v !== version && (pre || !isPrerelease(v)))
+      .filter((v) => parse(v) && v !== version && (pre || !isPrerelease(v)))
       .filter((v) => {
-        const t = Date.parse(packument.time[v] ?? '');
+        const t = Date.parse(own(packument.time, v) ?? '');
         return Number.isNaN(published) ? compare(v, version) < 0 : t < published;
       })
-      .sort((a, b) => Date.parse(packument.time[b] ?? '') - Date.parse(packument.time[a] ?? ''));
+      .sort((a, b) => Date.parse(own(packument.time, b) ?? '') - Date.parse(own(packument.time, a) ?? ''));
     const same = earlier.filter((v) => parse(v)?.major === major);
     const ordered = same.length >= 3 ? same : [...same, ...earlier.filter((v) => !same.includes(v))];
-    return ordered.slice(0, BASELINE_SIZE).map((v) => packument.versions[v]);
+    return ordered.slice(0, BASELINE_SIZE).map((v) => own(packument.versions, v)!);
   }
 
   private loadFiles(packument: Packument, version: string): Promise<FileMap> {
-    const manifest = packument.versions[version];
+    const manifest = own(packument.versions, version);
     if (!manifest?.dist?.tarball) return Promise.reject(new Error(`no tarball for ${version}`));
     return this.files.get(`${packument.name}@${version}`, () =>
       this.tarballs.fetchFiles(manifest.dist.tarball),
@@ -426,8 +472,9 @@ export class BouncerService {
 
   private resolveVersion(packument: Packument, version?: string): string {
     const v = (version ?? 'latest').trim();
-    if (packument['dist-tags'][v]) return packument['dist-tags'][v];
-    if (packument.versions[v] || packument.time[v]) return v;
+    const tag = own(packument['dist-tags'], v);
+    if (typeof tag === 'string' && parse(tag) && (own(packument.versions, tag) || own(packument.time, tag))) return tag;
+    if (parse(v) && (own(packument.versions, v) || own(packument.time, v))) return v;
     const matching = this.candidates(packument, v);
     if (matching.length) return matching[0];
     throw new PackageNotFoundError(`${packument.name} has no version matching "${v}"`);
@@ -435,19 +482,25 @@ export class BouncerService {
 
   /** Versions in `range`, newest first, stable only unless the range names a prerelease. */
   private candidates(packument: Packument, range: string): string[] {
+    range = range.trim();
+    if (Object.hasOwn(packument['dist-tags'], range)) {
+      const tagged = own(packument['dist-tags'], range);
+      return typeof tagged === 'string' && parse(tagged) && own(packument.versions, tagged) ? [tagged] : [];
+    }
     return Object.keys(packument.versions)
       .filter((v) => satisfies(v, range))
       .sort((a, b) => compare(b, a));
   }
 
   private async findSafeVersion(packument: Packument, range: string, rejected: string) {
-    const latest = packument['dist-tags'].latest;
+    const latest = own(packument['dist-tags'], 'latest');
     const pool = this.candidates(packument, range).filter((v) => v !== rejected);
-    if (latest && latest !== rejected && compare(latest, rejected) > 0) pool.unshift(latest);
+    if (typeof latest === 'string' && parse(latest) && own(packument.versions, latest)
+      && latest !== rejected && compare(latest, rejected) > 0) pool.unshift(latest);
     for (const v of pool.slice(0, 3)) {
       try {
-        const r = await this.checkLive(packument, v);
-        if (r.verdict === 'ALLOW') {
+        const r = await this.checkRelease(packument, v);
+        if (isSafe(r)) {
           return {
             version: v,
             reason: compare(v, rejected) > 0
@@ -508,11 +561,12 @@ export class BouncerService {
   }
 
   private securityHolder(packument: Packument): Report {
+    const latest = own(packument['dist-tags'], 'latest') ?? Object.keys(packument.versions)[0];
     const f = finding('existence', 'critical', `npm took ${packument.name} down as malware and replaced it with a security placeholder`, [
-      `latest is ${packument['dist-tags'].latest}; every real version was removed`,
+      `latest is ${latest}; every real version was removed`,
       'remove it from package.json and any lockfile, and rotate credentials on machines that installed it',
     ]);
-    return this.report(packument.name, packument['dist-tags'].latest, undefined, decide([f]), ['existence'], { available: true, advisories: [] }, false);
+    return this.report(packument.name, latest, undefined, decide([f]), ['existence'], { available: true, advisories: [] }, false);
   }
 
   private notFound(name: string): Report {
@@ -525,15 +579,32 @@ export class BouncerService {
 
   private removed(packument: Packument, version: string, advisories: AdvisoryLookup): Report {
     const f = finding('existence', 'critical', `${packument.name}@${version} was published and then removed from npm`, [
-      `published ${packument.time[version]}`,
+      `published ${own(packument.time, version)}`,
       'npm removes versions that turn out to be malware; never install it from a mirror or cache',
       ...advisories.advisories.filter((a) => a.malicious).map((a) => `${a.id}: ${a.summary ?? 'malicious package'}`),
     ]);
     const v = decide([f]);
-    const report = this.report(packument.name, version, packument.time[version], v, ['existence'], advisories, false);
+    const report = this.report(packument.name, version, own(packument.time, version), v, ['existence'], advisories, false);
     report.safeVersion = undefined;
     return report;
   }
+}
+
+function own<T>(record: Record<string, T>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
+
+function isIncomplete(title: string): boolean {
+  return /^(?:Code comparison incomplete|check incomplete)/i.test(title);
+}
+
+function isSafe(report: Report): boolean {
+  return report.verdict === 'ALLOW' && !report.findings.some(f => isIncomplete(f.title)) && !report.notes.some(isIncomplete);
 }
 
 function summarize(name: string, version: string, verdict: Verdict, findings: Finding[]): string {

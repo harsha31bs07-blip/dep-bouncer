@@ -1,6 +1,7 @@
 import { Injectable } from '@nitrostack/core';
 import type { PackageInfo, VersionManifest } from '../analysis/signal.js';
-import { fetchJson, UpstreamError } from './http.js';
+import { fetchBytes, fetchJson, UpstreamError } from './http.js';
+import { compare, parse, satisfies } from './semver.js';
 import { TtlCache } from './ttl-cache.js';
 
 const REGISTRY = 'https://registry.npmjs.org';
@@ -63,24 +64,37 @@ function trimManifest(m: VersionManifest): VersionManifest {
  */
 @Injectable()
 export class NpmRegistryService {
-  private readonly packuments = new TtlCache<Packument | null>(5 * 60_000, 200);
+  private readonly packumentSizes = new WeakMap<Packument, number>();
+  private readonly packuments = new TtlCache<Packument | null>(5 * 60_000, 200, {
+    maxBytes: 192 * 1024 * 1024,
+    sizeOf: p => p === null ? 0 : this.packumentSizes.get(p) ?? Infinity,
+  });
   private readonly downloads = new TtlCache<number | undefined>(30 * 60_000, 1000);
 
   /** Full packument (trimmed), or null if the package does not exist. */
   getPackument(name: string): Promise<Packument | null> {
     assertValidName(name);
     return this.packuments.get(name, async () => {
-      const raw = await fetchJson<Packument>('npm registry', `${REGISTRY}/${encodeName(name)}`, {
+      const bytes = await fetchBytes('npm registry', `${REGISTRY}/${encodeName(name)}`, {
         timeoutMs: 20_000,
         maxBytes: 80 * 1024 * 1024,
       });
-      if (raw === null) return null;
-      if (!raw.versions || !raw.time) {
+      if (bytes === null) return null;
+      let raw: Packument;
+      try {
+        raw = JSON.parse(new TextDecoder().decode(bytes)) as Packument;
+      } catch {
+        throw new UpstreamError('npm registry', 'invalid JSON response');
+      }
+      if (!raw || !raw.versions || !raw.time) {
         throw new UpstreamError('npm registry', `unexpected packument shape for ${name}`);
       }
-      const versions: Record<string, VersionManifest> = {};
+      const versions: Record<string, VersionManifest> = Object.create(null);
       for (const [v, m] of Object.entries(raw.versions)) versions[v] = trimManifest(m);
-      return { name: raw.name, 'dist-tags': raw['dist-tags'] ?? {}, time: raw.time, versions };
+      const packument = { name: raw.name, 'dist-tags': raw['dist-tags'] ?? {}, time: raw.time, versions };
+      this.packumentSizes.set(packument, bytes.byteLength > 20 * 1024 * 1024
+        ? Infinity : Buffer.byteLength(JSON.stringify(packument)));
+      return packument;
     });
   }
 
@@ -102,7 +116,7 @@ export class NpmRegistryService {
   }
 
   /** Summary used to judge a dependency that a release newly adds. */
-  async lookupPackage(name: string): Promise<PackageInfo | null> {
+  async lookupPackage(name: string, range?: string): Promise<PackageInfo | null> {
     try {
       assertValidName(name);
     } catch {
@@ -113,11 +127,20 @@ export class NpmRegistryService {
       this.getWeeklyDownloads(name),
     ]);
     if (!p) return null;
-    const latestVersion = p['dist-tags'].latest;
+    const latestVersion = Object.hasOwn(p['dist-tags'], 'latest') ? p['dist-tags'].latest : undefined;
+    const latest = typeof latestVersion === 'string' && parse(latestVersion) && Object.hasOwn(p.versions, latestVersion)
+      ? p.versions[latestVersion] : undefined;
+    const requested = range?.trim() ?? 'latest';
+    const tagged = Object.hasOwn(p['dist-tags'], requested);
+    const tagVersion = tagged ? p['dist-tags'][requested] : undefined;
+    const resolvedVersion = tagged
+      ? (typeof tagVersion === 'string' && parse(tagVersion) && Object.hasOwn(p.versions, tagVersion) ? tagVersion : undefined)
+      : Object.keys(p.versions).filter(v => satisfies(v, requested)).sort((a, b) => compare(b, a))[0];
     return {
       name,
-      created: p.time.created,
-      latest: latestVersion ? p.versions[latestVersion] : undefined,
+      created: Object.hasOwn(p.time, 'created') ? p.time.created : undefined,
+      latest,
+      resolved: resolvedVersion && Object.hasOwn(p.versions, resolvedVersion) ? p.versions[resolvedVersion] : undefined,
       versionCount: Object.keys(p.versions).length,
       weeklyDownloads,
     };

@@ -1,11 +1,27 @@
 import { Injectable } from '@nitrostack/core';
 import { gunzipSync } from 'node:zlib';
 import type { FileMap } from '../analysis/signal.js';
+import { fetchSameOrigin } from './http.js';
 
 const MB = 1024 * 1024;
 const MAX_COMPRESSED = 25 * MB;
 const MAX_EXTRACTED = 60 * MB;
 const MAX_FILES = 5_000;
+// Shared across service instances and tools; the slot covers download and parsing.
+let active = 0;
+const waiters: (() => void)[] = [];
+
+async function withDownloadSlot<T>(load: () => Promise<T>): Promise<T> {
+  if (active >= 4) await new Promise<void>(resolve => waiters.push(resolve));
+  else active++;
+  try {
+    return await load();
+  } finally {
+    const next = waiters.shift();
+    if (next) next();
+    else active--;
+  }
+}
 
 function field(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('utf8').split('\0', 1)[0];
@@ -102,8 +118,15 @@ export class TarballService {
     if (new URL(tarballUrl).origin !== 'https://registry.npmjs.org') {
       throw new Error(`Refusing to download a tarball from ${new URL(tarballUrl).origin}`);
     }
-    const response = await fetch(tarballUrl, { signal: AbortSignal.timeout(20_000) });
-    if (!response.ok) throw new Error(`Tarball download failed: HTTP ${response.status}`);
+    return withDownloadSlot(() => this.download(tarballUrl));
+  }
+
+  private async download(tarballUrl: string): Promise<FileMap> {
+    const response = await fetchSameOrigin('npm tarball', tarballUrl, { signal: AbortSignal.timeout(20_000) });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error(`Tarball download failed: HTTP ${response.status}`);
+    }
     if (Number(response.headers.get('content-length')) > MAX_COMPRESSED) {
       await response.body?.cancel();
       throw new Error('Compressed tarball exceeds 25 MB');
