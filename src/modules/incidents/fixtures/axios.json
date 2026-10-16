@@ -1,0 +1,112 @@
+{
+  "id": "axios",
+  "title": "axios: phantom dependency hijack",
+  "date": "2026-03-31",
+  "packageName": "axios",
+  "targetVersion": "1.14.1",
+  "goodVersion": "1.14.0",
+  "sources": [
+    {
+      "name": "OSV",
+      "url": "https://osv.dev/vulnerability/MAL-2026-2307"
+    },
+    {
+      "name": "npm last-good manifest",
+      "url": "https://registry.npmjs.org/axios/1.14.0"
+    }
+  ],
+  "real": [
+    "Incident identities, safe versions, publisher names, provenance presence, script changes and target publish times transcribed from supplied incident fact sheet (minute precision where supplied); no live registry data fetched"
+  ],
+  "reconstructed": [
+    "1.14.1 manifest (documented changes; tarball URL is a non-downloadable label)",
+    "OFFLINE PLACEHOLDER: 1.14.0 manifest is partial; good files are short no-ops, not real tarball contents",
+    "Baseline publish timestamps are synthetic placeholders; known date retained for axios and keyv; other baseline dates are illustrative",
+    "Attestation URLs, tarball URLs and axios dependency ranges are placeholders; only provenance presence and dependency names are fact-sheet facts",
+    "weeklyDownloads = 1000000 placeholder; builder replaces with current npm statistics",
+    "plain-crypto-js PackageInfo transcribed from fact sheet; dependency payload not included; no target file changes"
+  ],
+  "osvFirstAdvisory": {
+    "id": "MAL-2026-2307",
+    "lagHours": 2.9
+  },
+  "safeVersion": "1.14.0",
+  "weeklyDownloads": 1000000,
+  "baseline": [
+    {
+      "name": "axios",
+      "version": "1.14.0",
+      "_npmUser": {
+        "name": "GitHub Actions"
+      },
+      "dist": {
+        "tarball": "https://registry.npmjs.org/axios/-/PLACEHOLDER-1.14.0.tgz",
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/axios@1.14.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        }
+      },
+      "scripts": {
+        "prepare": "husky"
+      },
+      "dependencies": {
+        "form-data": "*",
+        "proxy-from-env": "*",
+        "follow-redirects": "*"
+      }
+    }
+  ],
+  "target": {
+    "name": "axios",
+    "version": "1.14.1",
+    "_npmUser": {
+      "name": "jasonsaayman"
+    },
+    "dist": {
+      "tarball": "https://registry.npmjs.org/axios/-/RECONSTRUCTED-1.14.1.tgz"
+    },
+    "scripts": {
+      "prepare": "husky"
+    },
+    "dependencies": {
+      "form-data": "*",
+      "proxy-from-env": "*",
+      "follow-redirects": "*",
+      "plain-crypto-js": "^4.2.1"
+    }
+  },
+  "time": {
+    "1.14.0": "2026-03-27T00:00:00.000Z",
+    "1.14.1": "2026-03-31T00:21:58.000Z"
+  },
+  "files": {
+    "1.14.0": {
+      "package.json": "{\n  \"name\": \"axios\",\n  \"version\": \"1.14.0\",\n  \"scripts\": {\n    \"prepare\": \"husky\"\n  },\n  \"dependencies\": {\n    \"form-data\": \"*\",\n    \"proxy-from-env\": \"*\",\n    \"follow-redirects\": \"*\"\n  }\n}\n",
+      "index.js": "// Offline placeholder for last-good source; not real package code.\nexport {};\n"
+    },
+    "1.14.1": {
+      "package.json": "{\n  \"name\": \"axios\",\n  \"version\": \"1.14.0\",\n  \"scripts\": {\n    \"prepare\": \"husky\"\n  },\n  \"dependencies\": {\n    \"form-data\": \"*\",\n    \"proxy-from-env\": \"*\",\n    \"follow-redirects\": \"*\"\n  }\n}\n",
+      "index.js": "// Offline placeholder for last-good source; not real package code.\nexport {};\n"
+    }
+  },
+  "packages": {
+    "plain-crypto-js": {
+      "name": "plain-crypto-js",
+      "created": "2026-03-30T05:57:32.867Z",
+      "versionCount": 2,
+      "weeklyDownloads": 0,
+      "latest": {
+        "name": "plain-crypto-js",
+        "version": "4.2.1",
+        "scripts": {
+          "postinstall": "node setup.js"
+        },
+        "dist": {
+          "tarball": "https://registry.npmjs.org/plain-crypto-js/-/RECONSTRUCTED-4.2.1.tgz"
+        }
+      }
+    }
+  }
+}

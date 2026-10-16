@@ -1,0 +1,87 @@
+{
+  "id": "nx",
+  "title": "nx: s1ngularity",
+  "date": "2025-08-26",
+  "packageName": "nx",
+  "targetVersion": "21.5.0",
+  "goodVersion": "21.4.1",
+  "sources": [
+    {
+      "name": "OSV",
+      "url": "https://osv.dev/vulnerability/MAL-2025-41443"
+    },
+    {
+      "name": "npm last-good manifest",
+      "url": "https://registry.npmjs.org/nx/21.4.1"
+    }
+  ],
+  "real": [
+    "Incident identities, safe versions, publisher names, provenance presence, script changes and target publish times transcribed from supplied incident fact sheet (minute precision where supplied); no live registry data fetched",
+    "file set trimmed: package.json, bin/post-install.js, bin/nx.js"
+  ],
+  "reconstructed": [
+    "21.5.0 manifest (documented changes; tarball URL is a non-downloadable label)",
+    "OFFLINE PLACEHOLDER: 21.4.1 manifest is partial; good files are short no-ops, not real tarball contents",
+    "Baseline publish timestamps are synthetic placeholders; known date retained for axios and keyv; other baseline dates are illustrative",
+    "Attestation URLs, tarball URLs and axios dependency ranges are placeholders; only provenance presence and dependency names are fact-sheet facts",
+    "weeklyDownloads = 1000000 placeholder; builder replaces with current npm statistics",
+    "injected code (benign stand-in, not real malware)"
+  ],
+  "osvFirstAdvisory": {
+    "id": "MAL-2025-41443",
+    "lagHours": 18.2
+  },
+  "safeVersion": "21.4.1",
+  "weeklyDownloads": 1000000,
+  "baseline": [
+    {
+      "name": "nx",
+      "version": "21.4.1",
+      "_npmUser": {
+        "name": "jameshenry"
+      },
+      "dist": {
+        "tarball": "https://registry.npmjs.org/nx/-/PLACEHOLDER-21.4.1.tgz",
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/nx@21.4.1",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        }
+      },
+      "scripts": {
+        "postinstall": "node ./bin/post-install || exit 0"
+      }
+    }
+  ],
+  "target": {
+    "name": "nx",
+    "version": "21.5.0",
+    "_npmUser": {
+      "name": "jameshenry"
+    },
+    "dist": {
+      "tarball": "https://registry.npmjs.org/nx/-/RECONSTRUCTED-21.5.0.tgz"
+    },
+    "scripts": {
+      "postinstall": "node telemetry.js"
+    }
+  },
+  "time": {
+    "21.4.1": "2025-08-25T00:00:00.000Z",
+    "21.5.0": "2025-08-26T22:32:00.000Z"
+  },
+  "files": {
+    "21.4.1": {
+      "package.json": "{\n  \"name\": \"nx\",\n  \"version\": \"21.4.1\",\n  \"scripts\": {\n    \"postinstall\": \"node ./bin/post-install || exit 0\"\n  },\n  \"dependencies\": {}\n}\n",
+      "bin/nx.js": "// Offline placeholder for last-good source; not real package code.\nexport {};\n",
+      "bin/post-install.js": "// Offline placeholder for the existing postinstall; no-op.\nvoid 0;\n"
+    },
+    "21.5.0": {
+      "package.json": "{\n  \"name\": \"nx\",\n  \"version\": \"21.5.0\",\n  \"scripts\": {\n    \"postinstall\": \"node telemetry.js\"\n  },\n  \"dependencies\": {}\n}\n",
+      "bin/nx.js": "// Offline placeholder for last-good source; not real package code.\nexport {};\n",
+      "bin/post-install.js": "// Offline placeholder for the existing postinstall; no-op.\nvoid 0;\n",
+      "telemetry.js": "/* Dep Bouncer reconstruction: benign stand-in, not real malware. */\nvoid [\"child_process\", \"claude --dangerously-skip-permissions\", \"gemini --yolo\", \"q --trust-all-tools\", \".ssh\", \".npmrc\", \"api.github.com/user/repos\", \".bashrc\"];\n"
+    }
+  }
+}
