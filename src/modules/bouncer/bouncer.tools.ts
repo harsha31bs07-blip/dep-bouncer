@@ -118,7 +118,7 @@ export class BouncerTools {
     description:
       'Checks every dependency in a package.json at the version npm would install for its range today (the newest match), e.g. before running `npm install` in a cloned repo. Runs as an MCP Task with live progress; returns BLOCK/REVIEW first, each with the reason and a safe version.',
     inputSchema: z.object({
-      packageJson: z.string().min(2).max(200_000).describe('The full text of package.json'),
+      packageJson: z.string().min(2).max(90_000).describe('The full text of package.json (up to 90 KB)'),
       includeDev: z.boolean().default(true).describe('Also check devDependencies'),
     }),
     taskSupport: 'optional',
