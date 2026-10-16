@@ -48,17 +48,23 @@ export class AnalysisService {
     return { ...decide(results.flat()), checks: this.signalIds };
   }
 
-  /** A failing or slow signal becomes an info note, never a crash or a silent pass. */
+  /** A failing or slow signal becomes an incomplete-check warning, never a crash or a silent pass. */
   private async run(signal: Signal, ctx: AnalysisContext): Promise<Finding[]> {
     let timer: NodeJS.Timeout | undefined;
+    const controller = new AbortController();
+    const deadline = Date.now() + SIGNAL_TIMEOUT_MS;
     try {
       const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('timed out')), SIGNAL_TIMEOUT_MS);
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error('timed out'));
+        }, SIGNAL_TIMEOUT_MS);
       });
-      return await Promise.race([signal.evaluate(ctx), timeout]);
+      const evaluationContext = { ...ctx, signal: controller.signal, deadline };
+      return await Promise.race([signal.evaluate(evaluationContext), timeout]);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      return [finding(signal.id, 'info', `${signal.id} check unavailable: ${reason}`)];
+      return [finding(signal.id, 'warn', `${signal.id} check incomplete: ${reason}`)];
     } finally {
       clearTimeout(timer);
     }

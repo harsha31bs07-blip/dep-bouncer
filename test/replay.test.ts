@@ -54,3 +54,37 @@ test('verdict thresholds: critical blocks, weights add up', () => {
   assert.equal(decide([f('high', 35), f('high', 35)]).verdict, 'BLOCK');
   assert.equal(decide([f('critical', 70)]).verdict, 'BLOCK');
 });
+
+test('fixture dependency lookups resolve to their sole manifest for any range', async () => {
+  const ctx = incidents.toContext('axios');
+  const info = await ctx.lookupPackage?.('plain-crypto-js', '^4.2.1');
+  assert.ok(info?.latest);
+  assert.deepEqual(info.resolved, info.latest);
+});
+
+test('signal timeout warns about incomplete coverage and prevents further dependency lookups', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const ctx = incidents.toContext('axios');
+  ctx.target.dependencies = { 'fixture-first': '^1', 'fixture-next': '^1' };
+  ctx.target.optionalDependencies = {};
+  ctx.loadFiles = async () => new Map([['index.js', Buffer.from("import 'fixture-first'; import 'fixture-next';")]]);
+  const calls: string[] = [];
+  let started!: () => void;
+  let releaseLookup!: () => void;
+  const lookupStarted = new Promise<void>(resolve => { started = resolve; });
+  ctx.lookupPackage = async name => {
+    calls.push(name);
+    started();
+    await new Promise<void>(resolve => { releaseLookup = resolve; });
+    return { name, versionCount: 20, latest: { name, version: '1.0.0', dist: { tarball: '' } } };
+  };
+  const pending = analysis.analyze(ctx);
+  await lookupStarted;
+  t.mock.timers.tick(25_000);
+  const result = await pending;
+  assert.ok(result.findings.some(f => f.signal === 'new-deps' && f.severity === 'warn' && f.weight === 15
+    && f.title === 'new-deps check incomplete: timed out'));
+  releaseLookup();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ['fixture-first']);
+});

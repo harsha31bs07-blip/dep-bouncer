@@ -62,9 +62,10 @@ export class IncidentsService {
         if (!Object.hasOwn(incident.files, version)) throw new Error(`Files unavailable for ${incident.packageName}@${version} in incident ${id}`);
         return new Map(Object.entries(incident.files[version]).map(([path, text]) => [path, new TextEncoder().encode(text)]));
       },
-      async lookupPackage(name) {
-        return incident.packages && Object.hasOwn(incident.packages, name)
-          ? structuredClone(incident.packages[name]) : null;
+      async lookupPackage(name, _range) {
+        if (!incident.packages || !Object.hasOwn(incident.packages, name)) return null;
+        const info = structuredClone(incident.packages[name]);
+        return { ...info, resolved: info.latest };
       },
     };
   }

