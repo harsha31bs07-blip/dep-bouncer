@@ -96,6 +96,11 @@ async function rpc(method, params, timeoutMs) {
         await sleep(backoff[attempt], undefined, { signal: controller.signal });
         continue;
       }
+      // 413 = body over the server's request limit; the caller decides whether that is expected.
+      if (response.status === 413) {
+        await response.body?.cancel().catch(() => undefined);
+        return { body: null, status: 413, durationMs: performance.now() - start };
+      }
       assert(response.status === 200, `HTTP ${response.status}`);
       const body = await readReply(response, id);
       assert(body.jsonrpc === '2.0' && body.id === id, 'Invalid JSON-RPC response envelope');
