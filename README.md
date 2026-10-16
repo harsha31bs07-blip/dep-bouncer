@@ -65,6 +65,7 @@ or refuses (BLOCK). The `safe_install` prompt teaches any agent that loop.
 | `bouncer_review_install_scripts` | npm 12 asks you to approve install scripts but only shows the command. This explains each one: APPROVE / REVIEW / DENY. |
 | `bouncer_replay_incident` | Replay a real hijack (axios, keyv, chalk, nx, tinycolor) as an agent met it, 30 minutes after publication. |
 | `bouncer://policy` | Signals, weights and thresholds. |
+| `bouncer://stats` | Live per-tool calls, errors, p50/p95 latency and verdict totals. |
 | `incidents://list` | The replayable incidents and their OSV lag. |
 | `safe_install` (prompt) | Rules that make an agent call Dep Bouncer before every dependency change and act on the verdict. |
 | `verdict-card` (widget) | Visual verdict with evidence, the "what other checks say" panel and a one-click "use the safe version". |
@@ -104,14 +105,20 @@ versions npm removed, and npm's `-security` placeholders are blocked outright.
 
 ## Benchmark
 
-`npm run bench` replays the five hijacks and checks the latest release of 60 popular
-packages (presumed healthy) to measure false positives. Latest run ([bench/RESULTS.md](bench/RESULTS.md)):
+`npm run bench` replays the five hijacks and checks the latest release of the **200 most
+downloaded npm packages** (presumed healthy; list in [bench/packages.txt](bench/packages.txt))
+to measure false positives. Latest run ([bench/RESULTS.md](bench/RESULTS.md)):
 
 - **Replayed hijacks: 5 / 5 BLOCK**, none of which OSV knew about at the replay time.
-- **60 popular releases: 56 ALLOW, 4 REVIEW, 0 BLOCK.** The REVIEWs: TypeScript 7 (a full
-  rewrite published by a new account), webpack and next (published < 18 h before the run;
-  next's 25 MB+ tarball also can't be diffed), and vitest (a new `.npmrc` reference next to
-  process execution). REVIEW means "ask the human", not "block".
+- **200 popular releases: 199 ALLOW, 1 REVIEW, 0 BLOCK.** The REVIEW is TypeScript 7, a full
+  rewrite published by a new account: exactly the kind of release a human should glance at.
+  REVIEW means "ask the human", not "block". (An earlier 60-package sample also caught fresh
+  webpack/next/vitest releases as REVIEW; results move as npm does.)
+
+**Live endpoint smoke test:** `node scripts/smoke.mjs` calls every tool, resource and prompt on
+the deployed server, plus 17 hostile inputs (path traversal, `__proto__`, broken JSON, oversized
+bodies, unknown versions). GitHub Actions runs it hourly and after every push; latest live
+run passes all must-checks (p50 0.4 s, p95 2.3 s).
 
 How we got here: the first run flagged webpack and vitest as BLOCK (bundlers rename chunk files
 every release). An independent security review then showed that relaxing that rule too far
@@ -168,11 +175,19 @@ test/                  node:test suites (signals, parser, replays, semver, ...)
 ```
 
 NitroStack features used: DI modules and `@Injectable`, `@Tool` / `@Resource` / `@Prompt`,
-`@Widget`, `@RateLimit`, MCP Tasks (`taskSupport`, progress, cancellation), `@HealthCheck`.
+`@Widget`, `@RateLimit`, `@Cache`, an interceptor (`MetricsInterceptor`), guards
+(`ApiKeyModule` + `@UseGuards`), MCP Tasks (`taskSupport`, progress, cancellation),
+`@HealthCheck` (system, npm registry, OSV), and the `bouncer://stats` resource for live
+per-tool latency, errors and verdict totals.
 
 **Safety:** Dep Bouncer never executes package code; tarballs come only from
 `registry.npmjs.org` and are parsed in memory (25 MB compressed, 60 MB extracted, 5,000 files,
-path-traversal checks). No API keys, no user data stored.
+path-traversal checks), with byte-budgeted caches, a 4-way download semaphore and redirect
+checks. No user data stored; metrics hold no request contents or IPs.
+
+**Authentication:** the public demo is open on purpose (read-only, public data, rate-limited,
+so judges and agents can try it). Set `DEP_BOUNCER_API_KEYS=key1,key2` to require an API key
+(NitroStack `ApiKeyModule`; clients send it in MCP `_meta.apiKey`). See `.env.example`.
 
 ## Use it
 
@@ -190,7 +205,7 @@ Then ask: *"Use the safe_install prompt, then add axios to this project."*
 ```bash
 npm install
 npm run build
-npm test            # 170+ tests, offline
+npm test            # 190+ tests, offline
 npm run bench       # replays + false-positive scan (needs network)
 npm run dev         # stdio, for NitroStudio
 ```
