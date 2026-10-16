@@ -110,6 +110,34 @@ export class BouncerTools {
   }
 
   @Tool({
+    name: 'bouncer_check_manifest',
+    description:
+      'Checks every dependency in a package.json at the version npm would install for its range today (the newest match), e.g. before running `npm install` in a cloned repo. Runs as an MCP Task with live progress; returns BLOCK/REVIEW first, each with the reason and a safe version.',
+    inputSchema: z.object({
+      packageJson: z.string().min(2).max(200_000).describe('The full text of package.json'),
+      includeDev: z.boolean().default(true).describe('Also check devDependencies'),
+    }),
+    taskSupport: 'optional',
+    annotations: { readOnlyHint: true, openWorldHint: true },
+    examples: {
+      request: { packageJson: '{"dependencies":{"axios":"^1.14.0","chalk":"^5.6.0"}}', includeDev: true },
+    },
+  })
+  @RateLimit({ requests: 3, window: '1m', message: 'Too many manifest checks; wait a minute.' })
+  async checkManifest(input: { packageJson: string; includeDev?: boolean }, ctx: ExecutionContext) {
+    ctx.logger.info('check_manifest', { bytes: input.packageJson.length });
+    return this.bouncer.checkManifest(
+      input.packageJson,
+      input.includeDev ?? true,
+      (message) => {
+        ctx.task?.updateProgress(message);
+        ctx.logger.info(message);
+      },
+      () => ctx.task?.isCancelled ?? false,
+    );
+  }
+
+  @Tool({
     name: 'bouncer_replay_incident',
     description:
       'Replays a real npm hijack through Dep Bouncer, as an agent would have met it 30 minutes after publication, before any advisory existed. Incidents: axios (2026), keyv (2026), chalk (2025), nx (2025), tinycolor (2025). The malicious versions were removed from npm, so the bad release is a clearly labelled reconstruction with benign stand-in code.',

@@ -4,7 +4,7 @@ import type { AnalysisContext, FileMap, Finding, VersionManifest } from '../anal
 import { finding, formatAge, hoursBetween, REPLAY_NOW } from '../analysis/signals/finding.js';
 import { decide, type Verdict } from '../analysis/verdict.js';
 import { IncidentsService } from '../incidents/incidents.service.js';
-import { NpmRegistryService, type Packument } from '../registry/npm-registry.service.js';
+import { assertValidName, NpmRegistryService, type Packument } from '../registry/npm-registry.service.js';
 import { OsvService, type AdvisoryLookup } from '../registry/osv.service.js';
 import { compare, isPrerelease, parse, satisfies } from '../registry/semver.js';
 import { TarballService } from '../registry/tarball.service.js';
@@ -54,6 +54,28 @@ export interface ScriptReview {
 }
 
 const MAX_SCRIPT_REVIEWS = 15;
+const MAX_MANIFEST_DEPS = 60;
+const MANIFEST_CONCURRENCY = 4;
+
+export interface ManifestEntry {
+  name: string;
+  range: string;
+  /** The version npm would install for `range` right now. */
+  resolved?: string;
+  verdict: Verdict | 'SKIPPED';
+  score?: number;
+  reason: string;
+  safeVersion?: string;
+}
+
+export interface ManifestReport {
+  verdict: Verdict;
+  summary: string;
+  counts: Record<'BLOCK' | 'REVIEW' | 'ALLOW' | 'SKIPPED', number>;
+  truncated: boolean;
+  cancelled: boolean;
+  results: ManifestEntry[];
+}
 
 export class PackageNotFoundError extends Error {}
 
@@ -77,6 +99,7 @@ export class BouncerService {
   async checkPackage(name: string, version?: string): Promise<Report> {
     const packument = await this.registry.getPackument(name);
     if (!packument) return this.notFound(name);
+    if (isSecurityHolder(packument)) return this.securityHolder(packument);
     const resolved = this.resolveVersion(packument, version);
     const manifest = packument.versions[resolved];
     if (!manifest) {
@@ -133,6 +156,99 @@ export class BouncerService {
       summary: `${count('APPROVE')} approve, ${count('REVIEW')} review, ${count('DENY')} deny, ${count('NO_SCRIPTS')} without install scripts`,
       packages: reviews,
     };
+  }
+
+  /**
+   * Checks every dependency of a package.json at the version npm would actually install for
+   * its range today (the newest match): `^1.14.0` during the axios window resolved to 1.14.1.
+   */
+  async checkManifest(
+    packageJson: string,
+    includeDev: boolean,
+    progress: (message: string) => void = () => {},
+    cancelled: () => boolean = () => false,
+  ): Promise<ManifestReport> {
+    let manifest: Record<string, unknown>;
+    try {
+      manifest = JSON.parse(packageJson) as Record<string, unknown>;
+    } catch {
+      throw new Error('packageJson is not valid JSON');
+    }
+    const sections = ['dependencies', 'optionalDependencies', ...(includeDev ? ['devDependencies'] : [])];
+    const deps = new Map<string, string>();
+    for (const section of sections) {
+      const entries = manifest[section];
+      if (entries && typeof entries === 'object') {
+        for (const [name, range] of Object.entries(entries as Record<string, unknown>)) {
+          if (typeof range === 'string' && !deps.has(name)) deps.set(name, range);
+        }
+      }
+    }
+    const all = [...deps.entries()];
+    const todo = all.slice(0, MAX_MANIFEST_DEPS);
+    const results: ManifestEntry[] = new Array(todo.length);
+    let done = 0;
+    let next = 0;
+    progress(`Checking ${todo.length} dependencies${all.length > todo.length ? ` (first ${todo.length} of ${all.length})` : ''}...`);
+
+    const worker = async () => {
+      while (next < todo.length) {
+        if (cancelled()) return;
+        const i = next++;
+        const [name, range] = todo[i];
+        results[i] = await this.checkDependency(name, range);
+        done++;
+        const r = results[i];
+        progress(`[${done}/${todo.length}] ${name}${r.resolved ? `@${r.resolved}` : ''}: ${r.verdict}`);
+      }
+    };
+    await Promise.all(Array.from({ length: MANIFEST_CONCURRENCY }, worker));
+
+    const finished = results.filter(Boolean);
+    const rank = { BLOCK: 0, REVIEW: 1, SKIPPED: 2, ALLOW: 3 } as const;
+    finished.sort((a, b) => rank[a.verdict] - rank[b.verdict] || a.name.localeCompare(b.name));
+    const count = (v: ManifestEntry['verdict']) => finished.filter((r) => r.verdict === v).length;
+    const counts = { BLOCK: count('BLOCK'), REVIEW: count('REVIEW'), ALLOW: count('ALLOW'), SKIPPED: count('SKIPPED') };
+    return {
+      verdict: counts.BLOCK ? 'BLOCK' : counts.REVIEW ? 'REVIEW' : 'ALLOW',
+      summary: `${finished.length} dependencies checked: ${counts.BLOCK} BLOCK, ${counts.REVIEW} REVIEW, ${counts.ALLOW} ALLOW, ${counts.SKIPPED} skipped`,
+      counts,
+      truncated: all.length > todo.length,
+      cancelled: cancelled(),
+      results: finished,
+    };
+  }
+
+  private async checkDependency(name: string, range: string): Promise<ManifestEntry> {
+    if (/^(?:file:|link:|workspace:|git\+|git:|github:|https?:|npm:)/.test(range) || range.includes('/')) {
+      return { name, range, verdict: 'SKIPPED', reason: 'not a plain npm registry range' };
+    }
+    try {
+      assertValidName(name);
+      const packument = await this.registry.getPackument(name);
+      if (!packument) {
+        return { name, range, verdict: 'BLOCK', score: 70, reason: `${name} does not exist on npm` };
+      }
+      if (isSecurityHolder(packument)) {
+        return { name, range, verdict: 'BLOCK', score: 70, reason: `npm replaced ${name} with a security placeholder: it was malware` };
+      }
+      const resolved = this.candidates(packument, range === '' ? '*' : range)[0];
+      if (!resolved) {
+        return { name, range, verdict: 'REVIEW', reason: `no published version matches ${range}` };
+      }
+      const report = await this.checkPackage(name, resolved);
+      return {
+        name,
+        range,
+        resolved,
+        verdict: report.verdict,
+        score: report.score,
+        reason: report.findings[0]?.title ?? 'no risk signals',
+        safeVersion: report.safeVersion?.version,
+      };
+    } catch (err) {
+      return { name, range, verdict: 'REVIEW', reason: `could not be checked: ${err instanceof Error ? err.message : String(err)}` };
+    }
   }
 
   private async reviewOne(name: string, version?: string): Promise<ScriptReview> {
@@ -391,6 +507,14 @@ export class BouncerService {
     };
   }
 
+  private securityHolder(packument: Packument): Report {
+    const f = finding('existence', 'critical', `npm took ${packument.name} down as malware and replaced it with a security placeholder`, [
+      `latest is ${packument['dist-tags'].latest}; every real version was removed`,
+      'remove it from package.json and any lockfile, and rotate credentials on machines that installed it',
+    ]);
+    return this.report(packument.name, packument['dist-tags'].latest, undefined, decide([f]), ['existence'], { available: true, advisories: [] }, false);
+  }
+
   private notFound(name: string): Report {
     const f = finding('existence', 'critical', `${name} does not exist on npm`, [
       'AI agents sometimes invent package names; attackers register them ("slopsquatting")',
@@ -442,4 +566,10 @@ function describeChange(a: VersionManifest, b: VersionManifest): string[] {
   }
   if (!out.length) out.push('no manifest-level changes (publisher, provenance, scripts, dependencies)');
   return out;
+}
+
+/** npm's placeholder for a package it removed as malware, e.g. plain-crypto-js@0.0.1-security.0. */
+function isSecurityHolder(packument: Packument): boolean {
+  const versions = Object.keys(packument.versions);
+  return versions.length > 0 && versions.every((v) => /-security(\.\d+)?$/.test(v));
 }
