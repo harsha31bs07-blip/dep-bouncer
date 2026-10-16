@@ -19,13 +19,50 @@ function context(dependencies: Record<string, string>, name = 'fixture'): Analys
 }
 const signal = new NewDepsSignal();
 
-test('more than ten added dependencies report exact unexamined count', async () => {
-  const ctx = context(Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`fixture-dependency-${i}`, '^1'])));
+test('more than thirty added dependencies report exact unexamined count', async () => {
+  const ctx = context(Object.fromEntries(Array.from({ length: 32 }, (_, i) => [`fixture-dependency-${i}`, '^1'])));
   const calls: string[] = [];
   ctx.lookupPackage = async name => { calls.push(name); return established(name); };
   const result = await signal.evaluate(ctx);
-  assert.equal(calls.length, 10);
+  assert.equal(calls.length, 30);
   assert.ok(result.some(f => f.title === '2 new dependencies not examined' && f.severity === 'warn' && f.weight === 15));
+});
+
+test('twenty-five own-publisher platform dependencies are all examined without coverage warnings', async () => {
+  const ctx = context(Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`@typescript/platform-${i}`, '^1'])), 'typescript');
+  ctx.target._npmUser = { name: 'maintainer' };
+  const calls: string[] = [];
+  ctx.lookupPackage = async name => { calls.push(name); return established(name, 'maintainer'); };
+  const result = await signal.evaluate(ctx);
+  assert.equal(calls.length, 25);
+  assert.ok(!result.some(f => f.title.includes('not examined')));
+  assert.ok(result.some(f => f.title === "25 new dependencies from the project's own scope or publisher"));
+});
+
+test('dependency lookups run at concurrency five and do not start more after cancellation', async () => {
+  const controller = new AbortController();
+  const ctx = { ...context(Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`fixture-dependency-${i}`, '^1']))),
+    signal: controller.signal };
+  const releases: (() => void)[] = [];
+  let started!: () => void;
+  const fiveStarted = new Promise<void>(resolve => { started = resolve; });
+  let calls = 0;
+  ctx.lookupPackage = async name => {
+    calls++;
+    await new Promise<void>(resolve => {
+      releases.push(resolve);
+      if (calls === 5) started();
+    });
+    return established(name);
+  };
+  const pending = signal.evaluate(ctx);
+  await fiveStarted;
+  assert.equal(calls, 5);
+  controller.abort();
+  releases.forEach(release => release());
+  const result = await pending;
+  assert.equal(calls, 5);
+  assert.ok(result.some(f => f.title === '20 new dependencies not examined'));
 });
 
 test('an unscoped target does not own similarly named scoped dependencies', async () => {

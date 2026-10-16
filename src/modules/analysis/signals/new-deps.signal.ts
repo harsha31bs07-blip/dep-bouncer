@@ -4,7 +4,8 @@ import { findLookalikes } from '../name-similarity.js';
 import { loadPopularPackages } from '../popular-packages.js';
 import { finding, formatAge, hoursBetween, installScripts, REPLAY_NOW } from './finding.js';
 
-const MAX_LOOKUPS = 10;
+const MAX_LOOKUPS = 30;
+const LOOKUP_CONCURRENCY = 5;
 
 interface DepVerdict {
   name: string;
@@ -43,8 +44,9 @@ export class NewDepsSignal implements Signal {
 
     const verdicts: DepVerdict[] = [];
     let examined = 0;
-    for (const name of added.slice(0, MAX_LOOKUPS)) {
-      if (stopped()) break;
+    const pending = added.slice(0, MAX_LOOKUPS);
+    let next = 0;
+    const inspect = async (name: string) => {
       let info: PackageInfo | null | undefined;
       try {
         info = ctx.lookupPackage ? await ctx.lookupPackage(name, now[name]) : undefined;
@@ -56,11 +58,16 @@ export class NewDepsSignal implements Signal {
       const owner = ctx.target._npmUser?.name;
       if (!info?.knownMalicious && owner && manifest?._npmUser?.name === owner) {
         own.push(name);
-        continue;
+        return;
       }
       // Optional platform packages are resolved by computed name, so "never imported" is normal.
       verdicts.push(this.judge(name, now[name], info, optional.has(name) ? null : referenced, popular, checkedAt));
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(LOOKUP_CONCURRENCY, pending.length) }, async () => {
+      while (!stopped() && next < pending.length) {
+        await inspect(pending[next++]);
+      }
+    }));
 
     const out: Finding[] = [];
     const unexamined = added.length - examined;

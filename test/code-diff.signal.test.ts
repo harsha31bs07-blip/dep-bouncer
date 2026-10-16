@@ -18,6 +18,50 @@ const signal = new CodeDiffSignal();
 const obfuscated = '// benign fixture\n' + '_0xabcdef;'.repeat(25);
 const diverse = Array.from({ length: 90 }, (_, index) => String.fromCharCode(33 + index)).join('');
 
+test('changed bundles reuse baseline exec and obfuscation capabilities without risk weight', async () => {
+  const baseline = files({ 'bundle.js': "require('child_process');\n" + obfuscated });
+  const target = files({ 'bundle.js': "require('child_process').spawn('node', ['--version']);\n" + obfuscated + ';changed();' });
+  const result = await signal.evaluate(context(target, baseline));
+  for (const category of ['exec', 'obfuscation']) {
+    const finding = result.find(f => f.title.includes(category));
+    assert.ok(finding, category);
+    assert.equal(finding.severity, 'info');
+    assert.equal(finding.weight, 0);
+  }
+});
+
+test('capability downgrades require the same pattern id and exclude added and install-run files', async () => {
+  const baseline = files({ 'bundle.js': "require('child_process');" });
+  for (const [target, scripts] of [
+    [files({ 'bundle.js': 'eval(newCode);' }), undefined],
+    [files({ 'new.js': "require('child_process').spawn('node');" }), undefined],
+    [files({ 'bundle.js': "require('child_process').spawn('node');" }), { install: 'node bundle.js' }],
+  ] as const) {
+    const result = await signal.evaluate(context(target, baseline, scripts, scripts));
+    assert.ok(result.some(f => f.title.includes('exec') && f.severity === 'warn' && f.weight === 15));
+  }
+});
+
+test('changed files can reuse a capability found in another baseline JavaScript file', async () => {
+  const helper = "require('child_process');";
+  const result = await signal.evaluate(context(
+    files({ 'bundle.js': "require('child_process').spawn('node');", 'helper.js': helper }),
+    files({ 'bundle.js': 'export {};', 'helper.js': helper }),
+  ));
+  assert.equal(result.length, 1);
+  assert.equal(result[0].severity, 'info');
+  assert.equal(result[0].weight, 0);
+});
+
+test('baseline capabilities never downgrade high exec or new wallet-obfuscation combinations', async () => {
+  const baseline = files({ 'bundle.js': "require('child_process');\n" + obfuscated });
+  const result = await signal.evaluate(context(files({ 'bundle.js':
+    "require('child_process');\nspawn('node', [], { detached: true });\nwindow.ethereum;\n" + obfuscated + ';changed();' }), baseline));
+  assert.ok(result.some(f => f.title.includes('exec') && f.severity === 'high'));
+  assert.ok(result.some(f => f.title.includes('obfuscation') && f.severity === 'critical'));
+  assert.ok(result.some(f => f.title.includes('wallet') && f.severity === 'critical'));
+});
+
 test('chalk-like changed code combining wallet hooks and obfuscation is critical', async () => {
   const result = await signal.evaluate(context(files({ 'index.js': `${obfuscated}\nwindow.ethereum.request; XMLHttpRequest.prototype.open; window.fetch = fixture;` }),
     files({ 'index.js': 'export {};' })));

@@ -12,7 +12,7 @@
       "Published by the personal account \"jasonsaayman\" instead of the package's CI (trusted publishing)"
     ],
     "durationMs": 67,
-    "timestamp": "2026-10-16T14:44:12.996Z"
+    "timestamp": "2026-10-16T14:51:17.840Z"
   },
   {
     "kind": "replay",
@@ -26,8 +26,8 @@
       "Suspicious ai-agent-abuse in release code",
       "Suspicious obfuscation in release code"
     ],
-    "durationMs": 89,
-    "timestamp": "2026-10-16T14:44:13.379Z"
+    "durationMs": 108,
+    "timestamp": "2026-10-16T14:51:18.217Z"
   },
   {
     "kind": "replay",
@@ -42,7 +42,7 @@
       "New publisher \"qix\" has never released this package before"
     ],
     "durationMs": 6,
-    "timestamp": "2026-10-16T14:44:13.773Z"
+    "timestamp": "2026-10-16T14:51:18.628Z"
   },
   {
     "kind": "replay",
@@ -56,8 +56,8 @@
       "Suspicious exfil in release code",
       "Suspicious ai-agent-abuse in release code"
     ],
-    "durationMs": 19,
-    "timestamp": "2026-10-16T14:44:14.088Z"
+    "durationMs": 21,
+    "timestamp": "2026-10-16T14:51:18.942Z"
   },
   {
     "kind": "replay",
@@ -71,8 +71,8 @@
       "Suspicious exfil in release code",
       "Suspicious persistence in release code"
     ],
-    "durationMs": 75,
-    "timestamp": "2026-10-16T14:44:14.417Z"
+    "durationMs": 78,
+    "timestamp": "2026-10-16T14:51:19.271Z"
   },
   {
     "kind": "popular",
@@ -82,8 +82,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1101,
-    "timestamp": "2026-10-16T14:44:14.797Z"
+    "durationMs": 1889,
+    "timestamp": "2026-10-16T14:51:19.650Z"
   },
   {
     "kind": "popular",
@@ -93,8 +93,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 2537,
-    "timestamp": "2026-10-16T14:44:16.211Z"
+    "durationMs": 1958,
+    "timestamp": "2026-10-16T14:51:21.849Z"
   },
   {
     "kind": "popular",
@@ -104,8 +104,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 483,
-    "timestamp": "2026-10-16T14:44:19.050Z"
+    "durationMs": 478,
+    "timestamp": "2026-10-16T14:51:24.122Z"
   },
   {
     "kind": "popular",
@@ -115,8 +115,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 487,
-    "timestamp": "2026-10-16T14:44:19.840Z"
+    "durationMs": 503,
+    "timestamp": "2026-10-16T14:51:24.911Z"
   },
   {
     "kind": "popular",
@@ -124,12 +124,10 @@
     "package": "axios",
     "version": "1.20.0",
     "verdict": "ALLOW",
-    "score": 15,
-    "findings": [
-      "Suspicious obfuscation in release code"
-    ],
-    "durationMs": 495,
-    "timestamp": "2026-10-16T14:44:20.641Z"
+    "score": 0,
+    "findings": [],
+    "durationMs": 506,
+    "timestamp": "2026-10-16T14:51:25.727Z"
   },
   {
     "kind": "popular",
@@ -139,8 +137,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 469,
-    "timestamp": "2026-10-16T14:44:21.441Z"
+    "durationMs": 462,
+    "timestamp": "2026-10-16T14:51:26.544Z"
   },
   {
     "kind": "popular",
@@ -150,8 +148,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 460,
-    "timestamp": "2026-10-16T14:44:22.215Z"
+    "durationMs": 558,
+    "timestamp": "2026-10-16T14:51:27.314Z"
   },
   {
     "kind": "popular",
@@ -159,12 +157,10 @@
     "package": "commander",
     "version": "15.0.0",
     "verdict": "ALLOW",
-    "score": 15,
-    "findings": [
-      "Suspicious exec in release code"
-    ],
-    "durationMs": 467,
-    "timestamp": "2026-10-16T14:44:22.984Z"
+    "score": 0,
+    "findings": [],
+    "durationMs": 584,
+    "timestamp": "2026-10-16T14:51:28.182Z"
   },
   {
     "kind": "popular",
@@ -172,14 +168,14 @@
     "package": "typescript",
     "version": "7.0.2",
     "verdict": "REVIEW",
-    "score": 60,
+    "score": 45,
     "findings": [
       "New publisher \"microsoft1es\" has never released this package before",
-      "10 new dependencies not examined",
-      "Suspicious exec in release code"
+      "Suspicious exec in release code",
+      "Suspicious obfuscation in release code"
     ],
-    "durationMs": 16865,
-    "timestamp": "2026-10-16T14:44:23.756Z"
+    "durationMs": 7961,
+    "timestamp": "2026-10-16T14:51:29.079Z"
   },
   {
     "kind": "popular",
@@ -189,10 +185,10 @@
     "verdict": "ALLOW",
     "score": 15,
     "findings": [
-      "Published 21 min ago"
+      "Published 27 min ago"
     ],
-    "durationMs": 1512,
-    "timestamp": "2026-10-16T14:44:40.923Z"
+    "durationMs": 709,
+    "timestamp": "2026-10-16T14:51:37.342Z"
   },
   {
     "kind": "popular",
@@ -202,8 +198,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 2238,
-    "timestamp": "2026-10-16T14:44:42.749Z"
+    "durationMs": 1824,
+    "timestamp": "2026-10-16T14:51:38.366Z"
   },
   {
     "kind": "popular",
@@ -213,26 +209,25 @@
     "verdict": "REVIEW",
     "score": 45,
     "findings": [
-      "Published 16.3 h ago",
+      "Published 16.4 h ago",
       "Suspicious obfuscation in release code",
       "Suspicious exec in release code"
     ],
-    "durationMs": 4029,
-    "timestamp": "2026-10-16T14:44:45.302Z"
+    "durationMs": 4792,
+    "timestamp": "2026-10-16T14:51:40.506Z"
   },
   {
     "kind": "popular",
     "id": "vite",
     "package": "vite",
     "version": "8.3.4",
-    "verdict": "REVIEW",
-    "score": 30,
+    "verdict": "ALLOW",
+    "score": 15,
     "findings": [
-      "Suspicious exec in release code",
       "Suspicious obfuscation in release code"
     ],
-    "durationMs": 2959,
-    "timestamp": "2026-10-16T14:44:49.647Z"
+    "durationMs": 2037,
+    "timestamp": "2026-10-16T14:51:45.612Z"
   },
   {
     "kind": "popular",
@@ -242,8 +237,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1667,
-    "timestamp": "2026-10-16T14:44:52.920Z"
+    "durationMs": 822,
+    "timestamp": "2026-10-16T14:51:47.951Z"
   },
   {
     "kind": "popular",
@@ -253,8 +248,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1535,
-    "timestamp": "2026-10-16T14:44:54.888Z"
+    "durationMs": 616,
+    "timestamp": "2026-10-16T14:51:49.080Z"
   },
   {
     "kind": "popular",
@@ -264,8 +259,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1709,
-    "timestamp": "2026-10-16T14:44:56.729Z"
+    "durationMs": 547,
+    "timestamp": "2026-10-16T14:51:50.007Z"
   },
   {
     "kind": "popular",
@@ -275,8 +270,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 545,
-    "timestamp": "2026-10-16T14:44:58.746Z"
+    "durationMs": 568,
+    "timestamp": "2026-10-16T14:51:50.870Z"
   },
   {
     "kind": "popular",
@@ -288,8 +283,8 @@
     "findings": [
       "Suspicious credentials in release code"
     ],
-    "durationMs": 1496,
-    "timestamp": "2026-10-16T14:44:59.595Z"
+    "durationMs": 1803,
+    "timestamp": "2026-10-16T14:51:51.749Z"
   },
   {
     "kind": "popular",
@@ -299,8 +294,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1657,
-    "timestamp": "2026-10-16T14:45:01.398Z"
+    "durationMs": 744,
+    "timestamp": "2026-10-16T14:51:53.853Z"
   },
   {
     "kind": "popular",
@@ -310,11 +305,11 @@
     "verdict": "REVIEW",
     "score": 30,
     "findings": [
-      "Published 17.8 h ago",
+      "Published 17.9 h ago",
       "Code comparison incomplete: Compressed tarball exceeds 25 MB"
     ],
-    "durationMs": 2405,
-    "timestamp": "2026-10-16T14:45:03.366Z"
+    "durationMs": 2501,
+    "timestamp": "2026-10-16T14:51:54.906Z"
   },
   {
     "kind": "popular",
@@ -322,12 +317,10 @@
     "package": "vue",
     "version": "3.5.44",
     "verdict": "ALLOW",
-    "score": 15,
-    "findings": [
-      "Suspicious obfuscation in release code"
-    ],
-    "durationMs": 708,
-    "timestamp": "2026-10-16T14:45:06.071Z"
+    "score": 0,
+    "findings": [],
+    "durationMs": 836,
+    "timestamp": "2026-10-16T14:51:57.717Z"
   },
   {
     "kind": "popular",
@@ -337,8 +330,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 634,
-    "timestamp": "2026-10-16T14:45:07.093Z"
+    "durationMs": 890,
+    "timestamp": "2026-10-16T14:51:58.865Z"
   },
   {
     "kind": "popular",
@@ -348,8 +341,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 731,
-    "timestamp": "2026-10-16T14:45:08.038Z"
+    "durationMs": 887,
+    "timestamp": "2026-10-16T14:52:00.064Z"
   },
   {
     "kind": "popular",
@@ -359,8 +352,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1457,
-    "timestamp": "2026-10-16T14:45:09.076Z"
+    "durationMs": 548,
+    "timestamp": "2026-10-16T14:52:01.252Z"
   },
   {
     "kind": "popular",
@@ -370,21 +363,21 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1412,
-    "timestamp": "2026-10-16T14:45:10.834Z"
+    "durationMs": 485,
+    "timestamp": "2026-10-16T14:52:02.101Z"
   },
   {
     "kind": "popular",
     "id": "date-fns",
     "package": "date-fns",
     "version": "4.4.0",
-    "verdict": "REVIEW",
+    "verdict": "ALLOW",
     "score": 15,
     "findings": [
       "Code comparison incomplete: Tarball exceeds 5000 files"
     ],
-    "durationMs": 5021,
-    "timestamp": "2026-10-16T14:45:12.550Z"
+    "durationMs": 890,
+    "timestamp": "2026-10-16T14:52:02.886Z"
   },
   {
     "kind": "popular",
@@ -392,12 +385,10 @@
     "package": "moment",
     "version": "2.31.0",
     "verdict": "ALLOW",
-    "score": 15,
-    "findings": [
-      "Suspicious obfuscation in release code"
-    ],
-    "durationMs": 742,
-    "timestamp": "2026-10-16T14:45:17.881Z"
+    "score": 0,
+    "findings": [],
+    "durationMs": 836,
+    "timestamp": "2026-10-16T14:52:04.084Z"
   },
   {
     "kind": "popular",
@@ -407,8 +398,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 516,
-    "timestamp": "2026-10-16T14:45:18.937Z"
+    "durationMs": 491,
+    "timestamp": "2026-10-16T14:52:05.235Z"
   },
   {
     "kind": "popular",
@@ -418,8 +409,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1477,
-    "timestamp": "2026-10-16T14:45:19.759Z"
+    "durationMs": 660,
+    "timestamp": "2026-10-16T14:52:06.037Z"
   },
   {
     "kind": "popular",
@@ -427,12 +418,10 @@
     "package": "dotenv",
     "version": "18.0.8",
     "verdict": "ALLOW",
-    "score": 15,
-    "findings": [
-      "Suspicious exec in release code"
-    ],
-    "durationMs": 551,
-    "timestamp": "2026-10-16T14:45:21.536Z"
+    "score": 0,
+    "findings": [],
+    "durationMs": 650,
+    "timestamp": "2026-10-16T14:52:06.997Z"
   },
   {
     "kind": "popular",
@@ -444,8 +433,8 @@
     "findings": [
       "New publisher \"ulisesgascon\" has never released this package before"
     ],
-    "durationMs": 1481,
-    "timestamp": "2026-10-16T14:45:22.391Z"
+    "durationMs": 65781,
+    "timestamp": "2026-10-16T14:52:07.957Z"
   },
   {
     "kind": "popular",
@@ -455,8 +444,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1442,
-    "timestamp": "2026-10-16T14:45:24.182Z"
+    "durationMs": 526,
+    "timestamp": "2026-10-16T14:53:14.046Z"
   },
   {
     "kind": "popular",
@@ -466,8 +455,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1430,
-    "timestamp": "2026-10-16T14:45:25.929Z"
+    "durationMs": 549,
+    "timestamp": "2026-10-16T14:53:14.883Z"
   },
   {
     "kind": "popular",
@@ -477,8 +466,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1433,
-    "timestamp": "2026-10-16T14:45:27.667Z"
+    "durationMs": 479,
+    "timestamp": "2026-10-16T14:53:15.739Z"
   },
   {
     "kind": "popular",
@@ -488,8 +477,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1462,
-    "timestamp": "2026-10-16T14:45:29.410Z"
+    "durationMs": 565,
+    "timestamp": "2026-10-16T14:53:16.534Z"
   },
   {
     "kind": "popular",
@@ -499,10 +488,10 @@
     "verdict": "ALLOW",
     "score": 15,
     "findings": [
-      "Published 23.7 h ago"
+      "Published 23.8 h ago"
     ],
-    "durationMs": 491,
-    "timestamp": "2026-10-16T14:45:31.185Z"
+    "durationMs": 757,
+    "timestamp": "2026-10-16T14:53:17.399Z"
   },
   {
     "kind": "popular",
@@ -512,8 +501,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1451,
-    "timestamp": "2026-10-16T14:45:31.990Z"
+    "durationMs": 527,
+    "timestamp": "2026-10-16T14:53:18.467Z"
   },
   {
     "kind": "popular",
@@ -523,8 +512,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1637,
-    "timestamp": "2026-10-16T14:45:33.755Z"
+    "durationMs": 496,
+    "timestamp": "2026-10-16T14:53:19.298Z"
   },
   {
     "kind": "popular",
@@ -534,8 +523,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1672,
-    "timestamp": "2026-10-16T14:45:35.708Z"
+    "durationMs": 498,
+    "timestamp": "2026-10-16T14:53:20.096Z"
   },
   {
     "kind": "popular",
@@ -545,8 +534,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1444,
-    "timestamp": "2026-10-16T14:45:37.688Z"
+    "durationMs": 538,
+    "timestamp": "2026-10-16T14:53:20.898Z"
   },
   {
     "kind": "popular",
@@ -556,8 +545,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1453,
-    "timestamp": "2026-10-16T14:45:39.446Z"
+    "durationMs": 472,
+    "timestamp": "2026-10-16T14:53:21.745Z"
   },
   {
     "kind": "popular",
@@ -567,8 +556,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1455,
-    "timestamp": "2026-10-16T14:45:41.207Z"
+    "durationMs": 534,
+    "timestamp": "2026-10-16T14:53:22.523Z"
   },
   {
     "kind": "popular",
@@ -578,8 +567,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 626,
-    "timestamp": "2026-10-16T14:45:42.970Z"
+    "durationMs": 524,
+    "timestamp": "2026-10-16T14:53:23.368Z"
   },
   {
     "kind": "popular",
@@ -589,8 +578,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1460,
-    "timestamp": "2026-10-16T14:45:43.911Z"
+    "durationMs": 529,
+    "timestamp": "2026-10-16T14:53:24.200Z"
   },
   {
     "kind": "popular",
@@ -600,8 +589,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1451,
-    "timestamp": "2026-10-16T14:45:45.680Z"
+    "durationMs": 524,
+    "timestamp": "2026-10-16T14:53:25.033Z"
   },
   {
     "kind": "popular",
@@ -611,8 +600,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1485,
-    "timestamp": "2026-10-16T14:45:47.444Z"
+    "durationMs": 494,
+    "timestamp": "2026-10-16T14:53:25.866Z"
   },
   {
     "kind": "popular",
@@ -622,8 +611,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 729,
-    "timestamp": "2026-10-16T14:45:49.238Z"
+    "durationMs": 502,
+    "timestamp": "2026-10-16T14:53:26.666Z"
   },
   {
     "kind": "popular",
@@ -633,8 +622,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1571,
-    "timestamp": "2026-10-16T14:45:50.276Z"
+    "durationMs": 518,
+    "timestamp": "2026-10-16T14:53:27.482Z"
   },
   {
     "kind": "popular",
@@ -646,22 +635,21 @@
     "findings": [
       "New publisher \"blakeembrey\" has never released this package before"
     ],
-    "durationMs": 1483,
-    "timestamp": "2026-10-16T14:45:52.148Z"
+    "durationMs": 540,
+    "timestamp": "2026-10-16T14:53:28.308Z"
   },
   {
     "kind": "popular",
     "id": "tsx",
     "package": "tsx",
     "version": "4.23.15",
-    "verdict": "REVIEW",
-    "score": 30,
+    "verdict": "ALLOW",
+    "score": 15,
     "findings": [
-      "Suspicious obfuscation in release code",
-      "Suspicious exec in release code"
+      "Suspicious obfuscation in release code"
     ],
-    "durationMs": 2878,
-    "timestamp": "2026-10-16T14:45:53.939Z"
+    "durationMs": 522,
+    "timestamp": "2026-10-16T14:53:29.157Z"
   },
   {
     "kind": "popular",
@@ -671,8 +659,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1761,
-    "timestamp": "2026-10-16T14:45:57.131Z"
+    "durationMs": 1017,
+    "timestamp": "2026-10-16T14:53:29.989Z"
   },
   {
     "kind": "popular",
@@ -682,8 +670,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 493,
-    "timestamp": "2026-10-16T14:45:59.197Z"
+    "durationMs": 467,
+    "timestamp": "2026-10-16T14:53:31.307Z"
   },
   {
     "kind": "popular",
@@ -693,8 +681,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 786,
-    "timestamp": "2026-10-16T14:45:59.997Z"
+    "durationMs": 961,
+    "timestamp": "2026-10-16T14:53:32.077Z"
   },
   {
     "kind": "popular",
@@ -702,12 +690,10 @@
     "package": "immer",
     "version": "11.1.21",
     "verdict": "ALLOW",
-    "score": 15,
-    "findings": [
-      "Suspicious obfuscation in release code"
-    ],
-    "durationMs": 1425,
-    "timestamp": "2026-10-16T14:46:01.095Z"
+    "score": 0,
+    "findings": [],
+    "durationMs": 560,
+    "timestamp": "2026-10-16T14:53:33.348Z"
   },
   {
     "kind": "popular",
@@ -719,8 +705,8 @@
     "findings": [
       "New publisher \"phryneas\" has never released this package before"
     ],
-    "durationMs": 1485,
-    "timestamp": "2026-10-16T14:46:02.820Z"
+    "durationMs": 558,
+    "timestamp": "2026-10-16T14:53:34.211Z"
   },
   {
     "kind": "popular",
@@ -728,12 +714,10 @@
     "package": "@reduxjs/toolkit",
     "version": "2.13.0",
     "verdict": "ALLOW",
-    "score": 15,
-    "findings": [
-      "Suspicious obfuscation in release code"
-    ],
-    "durationMs": 1680,
-    "timestamp": "2026-10-16T14:46:04.612Z"
+    "score": 0,
+    "findings": [],
+    "durationMs": 1342,
+    "timestamp": "2026-10-16T14:53:35.073Z"
   },
   {
     "kind": "popular",
@@ -743,8 +727,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 67879,
-    "timestamp": "2026-10-16T14:46:06.595Z"
+    "durationMs": 1543,
+    "timestamp": "2026-10-16T14:53:36.718Z"
   },
   {
     "kind": "popular",
@@ -756,8 +740,8 @@
     "findings": [
       "Suspicious obfuscation in release code"
     ],
-    "durationMs": 973,
-    "timestamp": "2026-10-16T14:47:14.781Z"
+    "durationMs": 1006,
+    "timestamp": "2026-10-16T14:53:38.570Z"
   },
   {
     "kind": "popular",
@@ -767,8 +751,8 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1509,
-    "timestamp": "2026-10-16T14:47:16.057Z"
+    "durationMs": 579,
+    "timestamp": "2026-10-16T14:53:39.888Z"
   },
   {
     "kind": "popular",
@@ -778,7 +762,7 @@
     "verdict": "ALLOW",
     "score": 0,
     "findings": [],
-    "durationMs": 1487,
-    "timestamp": "2026-10-16T14:47:17.867Z"
+    "durationMs": 581,
+    "timestamp": "2026-10-16T14:53:40.782Z"
   }
 ]

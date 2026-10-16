@@ -83,6 +83,7 @@ export class CodeDiffSignal implements Signal {
       };
       let beforeLines: Set<string> | undefined;
       const beforeTexts: string[] = [];
+      const beforePatterns = new Set<string>();
       const previousLines = (): Set<string> => {
         if (beforeLines) return beforeLines;
         beforeLines = new Set<string>();
@@ -92,6 +93,7 @@ export class CodeDiffSignal implements Signal {
           if (!source) continue;
           const text = source.toString('utf8');
           beforeTexts.push(text);
+          for (const hit of scanSource(path, text)) beforePatterns.add(hit.id);
           let start = 0;
           while (start <= text.length) {
             const newline = text.indexOf('\n', start);
@@ -153,6 +155,11 @@ export class CodeDiffSignal implements Signal {
           if (['exfil', 'credentials'].includes(hit.category)) severity = stealerContext ? 'high' : 'warn';
           if (newInstall) severity = hit.category !== 'exec' || allHits.some(other => other.category !== 'exec') ? 'critical' : 'high';
           if (walletObfuscation && ['wallet', 'obfuscation'].includes(hit.category)) severity = 'critical';
+          // Repeated low-risk capabilities in changed bundles carry no new risk weight.
+          // Keep combinations above intact, and never relax added or install-run code.
+          if (kind === 'changed' && !referenced && severity === 'warn'
+            && (hit.category === 'exec' || hit.category === 'obfuscation')
+            && beforePatterns.has(hit.id)) severity = 'info';
           report(path, hit, severity);
         }
       }

@@ -62,9 +62,20 @@ test('safe candidates exclude incomplete zero-weight findings and unavailable OS
   for (const title of ['Code comparison incomplete: download failed', 'check incomplete: deadline']) {
     const { service } = harness(pack(), { analyze: async ctx => ctx.target.version === '1.0.0' ? [] : [incomplete(title)] });
     assert.equal((await service.safeVersion('fixture')).safeVersion, '1.0.0');
-    assert.equal((await service.checkPackage('fixture', '3.0.0')).safeVersion?.version, '1.0.0');
+    assert.equal((await service.checkPackage('fixture', '3.0.0')).verdict, 'ALLOW');
   }
   const { service } = harness(pack(), { query: () => ({ available: false, advisories: [] }) });
+  assert.equal((await service.safeVersion('fixture')).safeVersion, undefined);
+});
+
+test('date-fns-like incomplete coverage alone allows with its warning but is never recommended', async () => {
+  const warning: Finding = { signal: 'code-diff', severity: 'warn', weight: 15,
+    title: 'Code comparison incomplete: Tarball exceeds 5000 files', evidence: [] };
+  const { service } = harness(pack(), { analyze: async () => [warning] });
+  const report = await service.checkPackage('fixture');
+  assert.equal(report.verdict, 'ALLOW');
+  assert.equal(report.score, 15);
+  assert.deepEqual(report.findings, [warning]);
   assert.equal((await service.safeVersion('fixture')).safeVersion, undefined);
 });
 
@@ -196,7 +207,7 @@ test('script review reports unavailable tarballs and does not confuse nested bin
   assert.equal((await nested.reviewInstallScripts([{ name: 'fixture' }])).packages[0].recommendation, 'NO_SCRIPTS');
 });
 
-test('implicit native installs remain visible for flagged releases and failed baselines', async () => {
+test('implicit native installs remain visible for blocked, incomplete and failed baseline checks', async () => {
   for (const blocked of [false, true]) {
     const { service } = harness(pack(), {
       query: () => blocked ? malware : clean,
@@ -204,7 +215,8 @@ test('implicit native installs remain visible for flagged releases and failed ba
       files: async () => new Map([['binding.gyp', Buffer.from('{}')]]),
     });
     const review = (await service.reviewInstallScripts([{ name: 'fixture' }])).packages[0];
-    assert.equal(review.recommendation, blocked ? 'DENY' : 'REVIEW');
+    // A zero-weight incomplete note alone no longer forces the release into REVIEW.
+    assert.equal(review.recommendation, blocked ? 'DENY' : 'APPROVE');
     assert.equal(review.scripts.install, 'node-gyp rebuild');
     assert.match(review.reasons.join(' '), /binding.gyp/);
   }

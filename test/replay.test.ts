@@ -65,17 +65,19 @@ test('fixture dependency lookups resolve to their sole manifest for any range', 
 test('signal timeout warns about incomplete coverage and prevents further dependency lookups', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
   const ctx = incidents.toContext('axios');
-  ctx.target.dependencies = { 'fixture-first': '^1', 'fixture-next': '^1' };
+  // Seven new dependencies, looked up five at a time: the second batch must never start.
+  const names = Array.from({ length: 7 }, (_, i) => `fixture-${i}`);
+  ctx.target.dependencies = Object.fromEntries(names.map(n => [n, '^1']));
   ctx.target.optionalDependencies = {};
-  ctx.loadFiles = async () => new Map([['index.js', Buffer.from("import 'fixture-first'; import 'fixture-next';")]]);
+  ctx.loadFiles = async () => new Map([['index.js', Buffer.from(names.map(n => `import '${n}';`).join(' '))]]);
   const calls: string[] = [];
   let started!: () => void;
-  let releaseLookup!: () => void;
+  const releases: (() => void)[] = [];
   const lookupStarted = new Promise<void>(resolve => { started = resolve; });
   ctx.lookupPackage = async name => {
     calls.push(name);
     started();
-    await new Promise<void>(resolve => { releaseLookup = resolve; });
+    await new Promise<void>(resolve => { releases.push(resolve); });
     return { name, versionCount: 20, latest: { name, version: '1.0.0', dist: { tarball: '' } } };
   };
   const pending = analysis.analyze(ctx);
@@ -84,7 +86,9 @@ test('signal timeout warns about incomplete coverage and prevents further depend
   const result = await pending;
   assert.ok(result.findings.some(f => f.signal === 'new-deps' && f.severity === 'warn' && f.weight === 15
     && f.title === 'new-deps check incomplete: timed out'));
-  releaseLookup();
+  const startedBeforeTimeout = calls.length;
+  assert.ok(startedBeforeTimeout <= 5, `at most one batch of 5 lookups, got ${startedBeforeTimeout}`);
+  for (const release of releases.splice(0)) release();
   await new Promise<void>(resolve => setImmediate(resolve));
-  assert.deepEqual(calls, ['fixture-first']);
+  assert.equal(calls.length, startedBeforeTimeout, 'no lookup starts after the timeout');
 });
