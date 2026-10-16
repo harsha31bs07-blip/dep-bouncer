@@ -1,7 +1,8 @@
-import { ResourceDecorator as Resource, ExecutionContext, Injectable } from '@nitrostack/core';
+import { ResourceDecorator as Resource, Cache, ExecutionContext, Injectable } from '@nitrostack/core';
 import { POLICY } from '../analysis/verdict.js';
 import { SEVERITY_WEIGHT } from '../analysis/signal.js';
 import { IncidentsService } from '../incidents/incidents.service.js';
+import { MetricsService } from '../observability/metrics.service.js';
 
 const SIGNALS = [
   { id: 'provenance-drop', catches: 'nx 2025, axios 2026', looksFor: 'previous releases were built and signed by CI (provenance); this one was not' },
@@ -15,9 +16,12 @@ const SIGNALS = [
 ];
 
 /** Read-only context an agent (or a judge) can inspect: the policy and the incident library. */
-@Injectable({ deps: [IncidentsService] })
+@Injectable({ deps: [IncidentsService, MetricsService] })
 export class BouncerResources {
-  constructor(private readonly incidents: IncidentsService) {}
+  constructor(
+    private readonly incidents: IncidentsService,
+    private readonly metrics: MetricsService,
+  ) {}
 
   @Resource({
     uri: 'bouncer://policy',
@@ -25,6 +29,7 @@ export class BouncerResources {
     description: 'The signals Dep Bouncer runs, their weights, and how findings become ALLOW / REVIEW / BLOCK.',
     mimeType: 'application/json',
   })
+  @Cache({ ttl: 3600 })
   async policy(_uri: string, ctx: ExecutionContext) {
     ctx.logger.info('policy resource');
     const body = {
@@ -51,6 +56,7 @@ export class BouncerResources {
     description: 'Real npm hijacks Dep Bouncer can replay, with how long the free advisory database (OSV) took to list each one.',
     mimeType: 'application/json',
   })
+  @Cache({ ttl: 3600 })
   async list(_uri: string, ctx: ExecutionContext) {
     ctx.logger.info('incidents list resource');
     const body = this.incidents.list().map((i) => ({
@@ -58,5 +64,15 @@ export class BouncerResources {
       replay: `bouncer_replay_incident {"incident": "${i.id}"}`,
     }));
     return body;
+  }
+
+  @Resource({
+    uri: 'bouncer://stats',
+    name: 'Dep Bouncer statistics',
+    description: 'Live uptime, version, tool call/error counts, latency percentiles and verdict totals. No request contents or client identifiers.',
+    mimeType: 'application/json',
+  })
+  async stats(_uri: string, _ctx: ExecutionContext) {
+    return this.metrics.snapshot();
   }
 }

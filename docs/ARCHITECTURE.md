@@ -21,6 +21,12 @@ MCP (Model Context Protocol) defines ways a client and server exchange callable 
 
 Dependency injection (DI) constructs providers and supplies their declared dependencies. `@Injectable({ deps: [...] })` explicitly lists constructor dependencies for classes such as `BouncerService`, `AnalysisService`, and `BouncerTools`; simple services use `@Injectable()`. `@Module` groups providers and exports. [`src/app.module.ts`](../src/app.module.ts) imports Registry, Analysis, Incidents, and Bouncer modules flatly because its comment says NitroStack only registers providers from directly imported modules. Bouncer also lists its dependencies in its module for documentation, but the root imports them directly so their providers are registered.
 
+## Authentication
+
+Tools are open by default for the public demo: they are read-only, live checks are rate-limited, and the server holds no user data. An organization can set `DEP_BOUNCER_API_KEYS` to comma-separated strong random keys and restart the server. Clients supply one key in MCP request `params._meta.apiKey` or `params._meta["x-api-key"]`; a bare HTTP header is not bridged by the SDK's legacy transport. `BouncerApiKeyGuard` uses NitroStack's `ApiKeyModule` with hashed configured keys and `@UseGuards` on every bouncer tool. Missing or invalid keys fail with an explicit error. Unset or empty configuration keeps tools public; resources and prompts always stay open.
+
+`ObservabilityModule` is imported directly by `AppModule` and exports `MetricsService` and the class-level `MetricsInterceptor`. `bouncer://stats` exposes aggregate call/error counts, p50/p95 latency over each tool's last 200 completed calls, lifetime verdict totals, uptime, start time, and the package version; metrics store no request contents, IPs, or keys. Guards run before interceptors, so denied requests are not counted. `@Cache` keeps incident replays (keyed by incident ID), policy, and the incident list for 3600 seconds, including resource methods because the SDK decorator wraps their handlers directly. Stats and live-check tools are not cached at the tool level.
+
 ## Module by module
 
 ### Registry

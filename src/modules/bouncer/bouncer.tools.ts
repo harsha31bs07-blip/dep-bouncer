@@ -1,4 +1,7 @@
-import { ToolDecorator as Tool, ExecutionContext, Injectable, RateLimit, Widget, z } from '@nitrostack/core';
+import { ToolDecorator as Tool, Cache, ExecutionContext, Injectable, RateLimit, UseGuards, UseInterceptors, Widget, z } from '@nitrostack/core';
+import { BouncerApiKeyGuard } from '../observability/api-key.guard.js';
+import { MetricsInterceptor } from '../observability/metrics.interceptor.js';
+import type { InterceptorConstructor } from '@nitrostack/core';
 import { BouncerService } from './bouncer.service.js';
 import { ReleaseDiffService } from './release-diff.service.js';
 
@@ -13,6 +16,8 @@ const packageName = z
  * (ALLOW / REVIEW / BLOCK), the evidence behind it, and what to do instead.
  */
 @Injectable({ deps: [BouncerService, ReleaseDiffService] })
+// The SDK types constructors as unknown[]; at runtime it resolves this token through DI.
+@UseInterceptors(MetricsInterceptor as unknown as InterceptorConstructor)
 export class BouncerTools {
   constructor(
     private readonly bouncer: BouncerService,
@@ -37,6 +42,7 @@ export class BouncerTools {
     },
   })
   @RateLimit({ requests: 30, window: '1m', message: 'Too many checks; wait a minute.' })
+  @UseGuards(BouncerApiKeyGuard)
   @Widget('verdict-card')
   async checkPackage(input: { name: string; version?: string }, ctx: ExecutionContext) {
     ctx.logger.info('check_package', { name: input.name, version: input.version });
@@ -58,6 +64,7 @@ export class BouncerTools {
     },
   })
   @RateLimit({ requests: 30, window: '1m', message: 'Too many checks; wait a minute.' })
+  @UseGuards(BouncerApiKeyGuard)
   @Widget('verdict-card')
   async checkUpgrade(input: { name: string; from: string; to: string }, ctx: ExecutionContext) {
     ctx.logger.info('check_upgrade', input);
@@ -78,6 +85,7 @@ export class BouncerTools {
     },
   })
   @RateLimit({ requests: 10, window: '1m', message: 'Too many safe-version searches; wait a minute.' })
+  @UseGuards(BouncerApiKeyGuard)
   async safeVersion(input: { name: string; range?: string }, ctx: ExecutionContext) {
     ctx.logger.info('safe_version', input);
     return this.bouncer.safeVersion(input.name.trim(), input.range?.trim() || '*');
@@ -105,6 +113,7 @@ export class BouncerTools {
     },
   })
   @RateLimit({ requests: 5, window: '1m', message: 'Too many script reviews; wait a minute.' })
+  @UseGuards(BouncerApiKeyGuard)
   async reviewInstallScripts(
     input: { packages: { name: string; version?: string }[] },
     ctx: ExecutionContext,
@@ -128,6 +137,7 @@ export class BouncerTools {
     },
   })
   @RateLimit({ requests: 3, window: '1m', message: 'Too many manifest checks; wait a minute.' })
+  @UseGuards(BouncerApiKeyGuard)
   async checkManifest(input: { packageJson: string; includeDev?: boolean }, ctx: ExecutionContext) {
     ctx.logger.info('check_manifest', { bytes: input.packageJson.length });
     return this.bouncer.checkManifest(
@@ -156,6 +166,7 @@ export class BouncerTools {
     },
   })
   @RateLimit({ requests: 20, window: '1m', message: 'Too many diffs; wait a minute.' })
+  @UseGuards(BouncerApiKeyGuard)
   async diffRelease(input: { name: string; from: string; to: string }, ctx: ExecutionContext) {
     ctx.logger.info('diff_release', input);
     return this.releases.diff(input.name.trim(), input.from.trim(), input.to.trim());
@@ -174,6 +185,8 @@ export class BouncerTools {
     },
   })
   @Widget('verdict-card')
+  @UseGuards(BouncerApiKeyGuard)
+  @Cache({ ttl: 3600, key: input => `bouncer:incident:${(input as { incident: string }).incident}` })
   async replayIncident(input: { incident: string }, ctx: ExecutionContext) {
     ctx.logger.info('replay_incident', input);
     return this.bouncer.replay(input.incident);
