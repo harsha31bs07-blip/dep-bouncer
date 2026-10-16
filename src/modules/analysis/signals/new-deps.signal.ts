@@ -22,43 +22,52 @@ interface DepVerdict {
 export class NewDepsSignal implements Signal {
   readonly id = 'new-deps';
 
-  async evaluate(ctx: AnalysisContext): Promise<Finding[]> {
+  async evaluate(ctx: AnalysisContext & { signal?: AbortSignal; deadline?: number }): Promise<Finding[]> {
     const previous = ctx.baseline[0];
     if (!previous) return [];
     const before = { ...previous.dependencies, ...previous.optionalDependencies };
     const now = { ...ctx.target.dependencies, ...ctx.target.optionalDependencies };
-    // Packages from the project's own scope (e.g. @typescript/* for typescript, or the
-    // per-platform binaries of esbuild/swc) are the project's own code, not a third party.
-    const ownScope = scopeOf(ctx.name) ?? `@${ctx.name}/`;
+    const ownScope = scopeOf(ctx.name);
     const optional = new Set(Object.keys(ctx.target.optionalDependencies ?? {}));
-    const all = Object.keys(now).filter((d) => !(d in before));
-    const own = all.filter((d) => d.startsWith(ownScope));
-    const added = all.filter((d) => !d.startsWith(ownScope));
-    if (added.length === 0) {
-      return own.length
-        ? [finding(this.id, 'info', `${own.length} new dependencies from the project's own scope`, [own.slice(0, 8).join(', ')])]
-        : [];
-    }
+    const all = Object.keys(now).filter((d) => !Object.hasOwn(before, d));
+    const own = all.filter((d) => ownScope && d.startsWith(ownScope));
+    const added = all.filter((d) => !ownScope || !d.startsWith(ownScope));
+    const stopped = () => ctx.signal?.aborted || (ctx.deadline !== undefined && Date.now() >= ctx.deadline);
+    if (!all.length) return [];
 
-    const referenced = await this.referencedNames(ctx, added);
+    const referenced = stopped() ? null : await this.referencedNames(ctx, added.slice(0, MAX_LOOKUPS));
     const popular = await loadPopularPackages();
     const checkedAt = ctx.reconstructed
       ? REPLAY_NOW(ctx.time[ctx.target.version])
       : new Date().toISOString();
 
     const verdicts: DepVerdict[] = [];
+    let examined = 0;
     for (const name of added.slice(0, MAX_LOOKUPS)) {
+      if (stopped()) break;
       let info: PackageInfo | null | undefined;
       try {
-        info = ctx.lookupPackage ? await ctx.lookupPackage(name) : undefined;
+        info = ctx.lookupPackage ? await ctx.lookupPackage(name, now[name]) : undefined;
       } catch {
         info = undefined;
+      }
+      examined++;
+      const manifest = info?.resolved ?? info?.latest;
+      const owner = ctx.target._npmUser?.name;
+      if (!info?.knownMalicious && owner && manifest?._npmUser?.name === owner) {
+        own.push(name);
+        continue;
       }
       // Optional platform packages are resolved by computed name, so "never imported" is normal.
       verdicts.push(this.judge(name, now[name], info, optional.has(name) ? null : referenced, popular, checkedAt));
     }
 
     const out: Finding[] = [];
+    const unexamined = added.length - examined;
+    if (unexamined) out.push(finding(this.id, 'warn', `${unexamined} new dependencies not examined`,
+      [stopped() ? 'Dependency check deadline exceeded or cancelled' : `Lookup limit: ${MAX_LOOKUPS}`]));
+    if (own.length) out.push(finding(this.id, 'info', `${own.length} new dependencies from the project's own scope or publisher`,
+      [own.slice(0, 8).join(', ')]));
     for (const v of verdicts.sort((a, b) => b.score - a.score)) {
       if (v.score >= 3) {
         out.push(
@@ -110,6 +119,7 @@ export class NewDepsSignal implements Signal {
       return { name, range, reasons: [`${name} does not exist on npm`], score: 3 };
     }
     if (info) {
+      if (info.knownMalicious) return { name, range, reasons: [`${name}@${info.resolved?.version ?? info.latest?.version ?? range} listed as malware in OSV`], score: 3 };
       if (info.created) {
         const age = hoursBetween(info.created, checkedAt);
         if (age < 7 * 24) {
@@ -120,7 +130,8 @@ export class NewDepsSignal implements Signal {
       if (info.versionCount <= 3) {
         reasons.push(`${name} has only ${info.versionCount} version(s)`);
       }
-      const scripts = info.latest ? installScripts(info.latest) : {};
+      const manifest = info.resolved ?? info.latest;
+      const scripts = manifest ? installScripts(manifest) : {};
       const hooks = Object.entries(scripts);
       if (hooks.length) {
         score++;
@@ -143,12 +154,14 @@ export class NewDepsSignal implements Signal {
   }
 
   /** Names imported anywhere in the target's JS files; null if files can't be loaded. */
-  private async referencedNames(ctx: AnalysisContext, names: string[]): Promise<Set<string> | null> {
+  private async referencedNames(ctx: AnalysisContext & { signal?: AbortSignal; deadline?: number }, names: string[]): Promise<Set<string> | null> {
+    if (!names.length) return new Set();
     try {
       const files = await ctx.loadFiles(ctx.target.version);
       const found = new Set<string>();
       const decoder = new TextDecoder();
       for (const [path, bytes] of files) {
+        if (ctx.signal?.aborted || (ctx.deadline !== undefined && Date.now() >= ctx.deadline)) return null;
         if (!/\.(c|m)?(j|t)sx?$/.test(path) || bytes.byteLength > 4 * 1024 * 1024) continue;
         const text = decoder.decode(bytes);
         for (const n of names) {

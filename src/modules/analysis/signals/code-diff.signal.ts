@@ -1,9 +1,10 @@
 import { Injectable } from '@nitrostack/core';
 import { createHash } from 'node:crypto';
-import { isMinified, scanSource, shannonEntropy, type PatternHit } from '../code-patterns.js';
+import { isMinified, scanSource, shannonEntropy, MAX_SOURCE_SCAN, SOURCE_HEAD, SOURCE_TAIL, type PatternHit } from '../code-patterns.js';
 import { SEVERITY_WEIGHT, type AnalysisContext, type Finding, type Severity, type Signal } from '../signal.js';
 
 const MB = 1024 * 1024;
+const RELEASE_SCAN_BUDGET = 24 * MB;
 const INSTALL_EVENTS = new Set(['preinstall', 'install', 'postinstall', 'prepublish', 'preprepare', 'prepare', 'postprepare']);
 const LOWER: Record<Severity, Severity> = { critical: 'high', high: 'warn', warn: 'info', info: 'info' };
 
@@ -19,7 +20,10 @@ function scriptReferences(script: string, path: string): boolean {
 export class CodeDiffSignal implements Signal {
   readonly id = 'code-diff';
 
-  async evaluate(ctx: AnalysisContext): Promise<Finding[]> {
+  async evaluate(ctx: AnalysisContext & { signal?: AbortSignal; deadline?: number }): Promise<Finding[]> {
+    const incomplete: Finding[] = [];
+    const warn = (reason: string, evidence: string[] = []) => incomplete.push({ signal: this.id,
+      severity: 'warn', title: `Code comparison incomplete: ${reason}`, evidence, weight: SEVERITY_WEIGHT.warn });
     try {
       const previous = ctx.baseline[0];
       const target = await ctx.loadFiles(ctx.target.version);
@@ -55,15 +59,47 @@ export class CodeDiffSignal implements Signal {
         }
       };
 
-      let beforeIds: Set<string> | undefined;
-      const previousPatterns = (): Set<string> => {
-        if (beforeIds) return beforeIds;
-        beforeIds = new Set<string>();
-        for (const [path, bytes] of baseline) {
-          if (!/\.(?:js|cjs|mjs)$/i.test(path) || bytes.byteLength > 8 * MB) continue;
-          for (const hit of scanSource(path, Buffer.from(bytes).toString('utf8'))) beforeIds.add(hit.id);
+      let scannedBytes = 0;
+      let skippedFiles = 0;
+      let cancelledFiles = 0;
+      const readSource = (path: string, bytes: Uint8Array): Buffer | undefined => {
+        const size = Math.min(bytes.byteLength, MAX_SOURCE_SCAN);
+        if (ctx.signal?.aborted || (ctx.deadline !== undefined && Date.now() >= ctx.deadline)) {
+          cancelledFiles++;
+          return undefined;
         }
-        return beforeIds;
+        if (scannedBytes + size > RELEASE_SCAN_BUDGET) {
+          skippedFiles++;
+          return undefined;
+        }
+        scannedBytes += size;
+        if (bytes.byteLength > MAX_SOURCE_SCAN) {
+          warn(`${path} too large to scan completely`, [`${bytes.byteLength} bytes; scanned first 2 MB and last 256 KB`]);
+          return Buffer.concat([bytes.subarray(0, SOURCE_HEAD), Buffer.from('\n'), bytes.subarray(-SOURCE_TAIL)]);
+        }
+        return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      };
+      let beforeLines: Set<string> | undefined;
+      const beforeTexts: string[] = [];
+      const previousLines = (): Set<string> => {
+        if (beforeLines) return beforeLines;
+        beforeLines = new Set<string>();
+        for (const [path, bytes] of baseline) {
+          if (!/\.(?:js|cjs|mjs)$/i.test(path)) continue;
+          const source = readSource(path, bytes);
+          if (!source) continue;
+          const text = source.toString('utf8');
+          beforeTexts.push(text);
+          let start = 0;
+          while (start <= text.length) {
+            const newline = text.indexOf('\n', start);
+            const end = newline < 0 ? text.length : newline;
+            if (end - start <= 400) beforeLines.add(text.slice(start, end).trim());
+            if (newline < 0) break;
+            start = newline + 1;
+          }
+        }
+        return beforeLines;
       };
 
       for (const { path, kind } of diff) {
@@ -72,53 +108,59 @@ export class CodeDiffSignal implements Signal {
         const js = /\.(?:js|cjs|mjs)$/i.test(path);
         const referenced = scripts.some(([, command]) => scriptReferences(command, path));
         const newInstall = newScripts.some(([, command]) => scriptReferences(command, path));
-        if (bytes.byteLength > 8 * MB) {
-          report(path, { id: 'oversized-file', category: 'obfuscation', severity: 'warn',
-            line: 1, snippet: `${bytes.byteLength} bytes; exceeds 8 MB source scanning limit` }, 'warn');
-          continue;
-        }
-        // Inspect paths for auto-run configuration even when the content is not JavaScript.
+        const installEntry = newInstall || (kind === 'added' && referenced);
+        // Inspect auto-run paths even when their contents are not JavaScript.
         let hits = scanSource(path, path).filter(hit => hit.id === 'agent-autorun' || hit.id === 'native-install');
-        if (js || referenced) hits = hits.concat(scanSource(path, Buffer.from(bytes).toString('utf8')));
-        if (kind === 'added' && bytes.byteLength > 300 * 1024) {
-          // Latin-1 preserves binary byte diversity, including payloads disguised as JS.
-          const entropy = shannonEntropy(Buffer.from(bytes).toString('latin1'));
+        // Build the baseline once, within the same release budget as target scanning.
+        if (previous && !installEntry) previousLines();
+        const needsSource = js || referenced || (kind === 'added' && bytes.byteLength > 300 * 1024);
+        const source = needsSource ? readSource(path, bytes) : undefined;
+        if (needsSource && !source) continue;
+        const text = source?.toString('utf8') ?? '';
+        if (js || referenced) hits = hits.concat(scanSource(path, text));
+        if (kind === 'added' && bytes.byteLength > 300 * 1024 && source) {
+          // Latin-1 preserves binary diversity, within the same bounded source sample.
+          const entropy = shannonEntropy(source.toString('latin1'));
           if (entropy > 5.5) hits.push({ id: 'packed-payload', category: 'obfuscation', severity: 'high',
-            line: 1, snippet: `encrypted/packed payload: ${bytes.byteLength} bytes, entropy ${entropy.toFixed(2)} bits/char` });
+            line: 1, sourceLine: text.slice(0, 160), sourceWindow: true,
+            snippet: `encrypted/packed payload: ${bytes.byteLength} bytes, entropy ${entropy.toFixed(2)} bits/char` });
         }
-        hits = hits.filter((hit, index) => hits.findIndex(other => other.id === hit.id) === index)
-          .filter(hit => kind === 'added' || (hit.id !== 'native-install' && hit.id !== 'packed-payload'));
-        if (previous && !newInstall) {
-          // Only what this release introduced to the package: a pattern the previous release
-          // already had anywhere (a bundled fetch polyfill, a CLI that spawns git, a chunk that
-          // was merely renamed by the bundler) is not evidence of a hijack.
-          const before = previousPatterns();
-          hits = hits.filter(hit => !before.has(hit.id));
-        }
-        if (kind === 'added' && js && bytes.byteLength > 500 * 1024
-          && isMinified(Buffer.from(bytes).toString('utf8'))) {
-          // Generated parsers and vendored bundles are common; on its own this is a weak signal.
+        hits = hits.filter(hit => kind === 'added' || (hit.id !== 'native-install' && hit.id !== 'packed-payload'));
+        if (kind === 'added' && js && bytes.byteLength > 500 * 1024 && isMinified(text)) {
           hits.push({ id: 'large-minified-file', category: 'obfuscation', severity: 'warn',
-            line: 1, snippet: `New minified JavaScript file: ${bytes.byteLength} bytes` });
+            line: 1, sourceLine: text.slice(0, 160), sourceWindow: true,
+            snippet: `New minified JavaScript file: ${bytes.byteLength} bytes` });
+        }
+        // Compute combinations before novelty filtering: unchanged exec next to a new
+        // credential upload still supplies the dangerous context for that new line.
+        const allHits = hits;
+        if (previous && !installEntry) {
+          const before = previousLines();
+          hits = hits.filter(hit => !hit.sourceLine || (hit.sourceWindow
+            ? !beforeTexts.some(text => text.includes(hit.sourceLine!))
+            : !before.has(hit.sourceLine)));
         }
         const walletObfuscation = hits.some(hit => hit.category === 'wallet')
           && hits.some(hit => hit.category === 'obfuscation');
         // A lone credential path or exfil host (e.g. ".npmrc" in a deny list) is weak; next to
         // process execution, obfuscation or AI-agent abuse in the same file it is a stealer.
-        const stealerContext = hits.some(hit => ['exec', 'obfuscation', 'ai-agent-abuse'].includes(hit.category));
+        const stealerContext = allHits.some(hit => ['exec', 'obfuscation', 'ai-agent-abuse'].includes(hit.category));
         for (const hit of hits) {
           let severity = hit.severity;
           if (hit.category === 'ai-agent-abuse') severity = 'high';
           if (['exfil', 'credentials'].includes(hit.category)) severity = stealerContext ? 'high' : 'warn';
-          if (newInstall || (walletObfuscation && ['wallet', 'obfuscation'].includes(hit.category))) severity = 'critical';
+          if (newInstall) severity = hit.category !== 'exec' || allHits.some(other => other.category !== 'exec') ? 'critical' : 'high';
+          if (walletObfuscation && ['wallet', 'obfuscation'].includes(hit.category)) severity = 'critical';
           report(path, hit, severity);
         }
       }
-      return [...findings.values()];
+      if (skippedFiles) warn(`code scan budget exceeded, ${skippedFiles} files not scanned`);
+      if (cancelledFiles) warn(`check deadline exceeded or cancelled, ${cancelledFiles} files not scanned`);
+      return [...findings.values(), ...incomplete];
     } catch (error) {
       const reason = (error instanceof Error ? error.message : String(error)).replace(/[\r\n]/g, ' ').slice(0, 200);
-      return [{ signal: this.id, severity: 'info', title: `code comparison unavailable: ${reason}`, evidence: [],
-        weight: SEVERITY_WEIGHT.info }];
+      warn(reason);
+      return incomplete;
     }
   }
 }
