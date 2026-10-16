@@ -66,8 +66,9 @@ test('first release scanning uses a lower severity and the contract weight', asy
   const ctx = context(files({ 'index.js': 'JSON.stringify(process.env)' }));
   ctx.baseline = [];
   const result = await signal.evaluate(ctx);
-  assert.equal(result[0].severity, 'warn');
-  assert.equal(result[0].weight, 15);
+  // A lone env dump is 'warn'; with no previous release to compare it drops one level.
+  assert.equal(result[0].severity, 'info');
+  assert.equal(result[0].weight, 0);
 });
 
 test('new non-JS install entry points, native builds and binary payloads are scanned', async () => {
@@ -89,7 +90,8 @@ test('new non-JS install entry points, native builds and binary payloads are sca
 test('existing install script does not escalate a changed file to critical', async () => {
   const result = await signal.evaluate(context(files({ 'setup.js': 'Object.keys(process.env)' }), files({ 'setup.js': 'export {};' }),
     { postinstall: 'node setup.js' }, { postinstall: 'node setup.js' }));
-  assert.equal(result[0].severity, 'high');
+  // Unchanged script: no critical escalation; a lone env dump without exec/obfuscation is weak.
+  assert.equal(result[0].severity, 'warn');
 });
 
 test('new large minified JS and oversized files are reported without oversized scanning', async () => {
@@ -97,7 +99,8 @@ test('new large minified JS and oversized files are reported without oversized s
     'bundle.min.js': 'a'.repeat(501 * 1024),
     'huge.js': `eval(fixture);${'a'.repeat(8 * 1024 * 1024)}`,
   })));
-  assert.ok(result.some(finding => finding.severity === 'high'));
+  // A new minified bundle alone is weak evidence (generated parsers, vendored code).
+  assert.ok(!result.some(finding => finding.severity === 'high' || finding.severity === 'critical'));
   assert.ok(result.some(finding => finding.evidence.some(item => item.includes('large-minified-file'))));
   assert.ok(result.some(finding => finding.evidence.some(item => item.includes('oversized-file'))));
   assert.ok(!result.some(finding => finding.evidence.some(item => item.includes('[eval]'))));
@@ -112,4 +115,20 @@ test('aggregation caps evidence per category and keeps critical evidence visible
   assert.equal(result[0].evidence.length, 5);
   assert.ok(result[0].evidence[0].startsWith('last.js:'));
   for (const finding of result) assert.equal(finding.weight, SEVERITY_WEIGHT[finding.severity]);
+});
+
+test('patterns the previous release already had anywhere are not new (renamed bundler chunks)', async () => {
+  const result = await signal.evaluate(context(
+    files({ 'dist/chunk.B2.js': "import { spawn } from 'node:child_process'; const deny = ['.npmrc'];" }),
+    files({ 'dist/chunk.A1.js': "import { spawn } from 'node:child_process'; const deny = ['.npmrc'];" }),
+  ));
+  assert.deepEqual(result, []);
+});
+
+test('a credential path next to process execution in a new file is high', async () => {
+  const result = await signal.evaluate(context(
+    files({ 'steal.js': "require('child_process'); read(home + '/.npmrc');" }),
+    files({ 'index.js': 'export {};' }),
+  ));
+  assert.ok(result.some(f => f.title.includes('credentials') && f.severity === 'high'));
 });

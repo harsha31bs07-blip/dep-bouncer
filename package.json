@@ -14,7 +14,8 @@
     "widget": "npm --prefix src/widgets",
     "test": "node --import tsx --test --test-force-exit --test-timeout=60000 \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "postbuild": "node scripts/copy-assets.mjs"
+    "postbuild": "node scripts/copy-assets.mjs",
+    "bench": "node scripts/benchmark.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.0.0",

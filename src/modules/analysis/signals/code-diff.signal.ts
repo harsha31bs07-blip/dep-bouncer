@@ -55,6 +55,17 @@ export class CodeDiffSignal implements Signal {
         }
       };
 
+      let beforeIds: Set<string> | undefined;
+      const previousPatterns = (): Set<string> => {
+        if (beforeIds) return beforeIds;
+        beforeIds = new Set<string>();
+        for (const [path, bytes] of baseline) {
+          if (!/\.(?:js|cjs|mjs)$/i.test(path) || bytes.byteLength > 8 * MB) continue;
+          for (const hit of scanSource(path, Buffer.from(bytes).toString('utf8'))) beforeIds.add(hit.id);
+        }
+        return beforeIds;
+      };
+
       for (const { path, kind } of diff) {
         if (kind === 'removed') continue;
         const bytes = target.get(path)!;
@@ -77,23 +88,28 @@ export class CodeDiffSignal implements Signal {
         }
         hits = hits.filter((hit, index) => hits.findIndex(other => other.id === hit.id) === index)
           .filter(hit => kind === 'added' || (hit.id !== 'native-install' && hit.id !== 'packed-payload'));
-        if (kind === 'changed' && (js || referenced)) {
-          // Only what this release introduced: a pattern the previous version of the same file
-          // already had (e.g. a bundled fetch polyfill) is not evidence of a hijack.
-          const old = baseline.get(path)!;
-          const before = new Set(scanSource(path, Buffer.from(old).toString('utf8')).map(hit => hit.id));
+        if (previous && !newInstall) {
+          // Only what this release introduced to the package: a pattern the previous release
+          // already had anywhere (a bundled fetch polyfill, a CLI that spawns git, a chunk that
+          // was merely renamed by the bundler) is not evidence of a hijack.
+          const before = previousPatterns();
           hits = hits.filter(hit => !before.has(hit.id));
         }
         if (kind === 'added' && js && bytes.byteLength > 500 * 1024
           && isMinified(Buffer.from(bytes).toString('utf8'))) {
-          hits.push({ id: 'large-minified-file', category: 'obfuscation', severity: 'high',
+          // Generated parsers and vendored bundles are common; on its own this is a weak signal.
+          hits.push({ id: 'large-minified-file', category: 'obfuscation', severity: 'warn',
             line: 1, snippet: `New minified JavaScript file: ${bytes.byteLength} bytes` });
         }
         const walletObfuscation = hits.some(hit => hit.category === 'wallet')
           && hits.some(hit => hit.category === 'obfuscation');
+        // A lone credential path or exfil host (e.g. ".npmrc" in a deny list) is weak; next to
+        // process execution, obfuscation or AI-agent abuse in the same file it is a stealer.
+        const stealerContext = hits.some(hit => ['exec', 'obfuscation', 'ai-agent-abuse'].includes(hit.category));
         for (const hit of hits) {
           let severity = hit.severity;
-          if (['ai-agent-abuse', 'exfil', 'credentials'].includes(hit.category)) severity = 'high';
+          if (hit.category === 'ai-agent-abuse') severity = 'high';
+          if (['exfil', 'credentials'].includes(hit.category)) severity = stealerContext ? 'high' : 'warn';
           if (newInstall || (walletObfuscation && ['wallet', 'obfuscation'].includes(hit.category))) severity = 'critical';
           report(path, hit, severity);
         }

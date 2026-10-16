@@ -80,6 +80,36 @@ export class BouncerTools {
   }
 
   @Tool({
+    name: 'bouncer_review_install_scripts',
+    description:
+      'npm 12 skips dependency install scripts until they are approved (`npm approve-scripts`), but only shows the command. Pass the packages it lists; for each one this returns the scripts, why, and APPROVE / REVIEW / DENY. Also useful on npm 11 to see which dependencies run code at install time.',
+    inputSchema: z.object({
+      packages: z
+        .array(
+          z.object({
+            name: packageName,
+            version: z.string().max(64).optional().describe('Version; defaults to latest'),
+          }),
+        )
+        .min(1)
+        .max(15)
+        .describe('Packages whose install scripts need a decision (max 15)'),
+    }),
+    annotations: { readOnlyHint: true, openWorldHint: true },
+    examples: {
+      request: { packages: [{ name: 'esbuild' }, { name: 'sharp' }] },
+    },
+  })
+  @RateLimit({ requests: 5, window: '1m', message: 'Too many script reviews; wait a minute.' })
+  async reviewInstallScripts(
+    input: { packages: { name: string; version?: string }[] },
+    ctx: ExecutionContext,
+  ) {
+    ctx.logger.info('review_install_scripts', { count: input.packages.length });
+    return this.bouncer.reviewInstallScripts(input.packages);
+  }
+
+  @Tool({
     name: 'bouncer_replay_incident',
     description:
       'Replays a real npm hijack through Dep Bouncer, as an agent would have met it 30 minutes after publication, before any advisory existed. Incidents: axios (2026), keyv (2026), chalk (2025), nx (2025), tinycolor (2025). The malicious versions were removed from npm, so the bad release is a clearly labelled reconstruction with benign stand-in code.',

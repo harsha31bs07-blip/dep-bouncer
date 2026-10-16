@@ -44,6 +44,17 @@ export interface Report {
   };
 }
 
+export interface ScriptReview {
+  package: string;
+  version: string;
+  recommendation: 'APPROVE' | 'REVIEW' | 'DENY' | 'NO_SCRIPTS';
+  scripts: Record<string, string>;
+  reasons: string[];
+  safeVersion?: string;
+}
+
+const MAX_SCRIPT_REVIEWS = 15;
+
 export class PackageNotFoundError extends Error {}
 
 /**
@@ -93,6 +104,82 @@ export class BouncerService {
       report.safeVersion = await this.findSafeVersion(packument, `<${resolved}`, resolved);
     }
     return report;
+  }
+
+  /**
+   * npm 12 skips dependency install scripts until someone approves them, but its approval list
+   * only shows the command. This explains each script and recommends APPROVE / DENY / REVIEW.
+   */
+  async reviewInstallScripts(packages: { name: string; version?: string }[]): Promise<{
+    summary: string;
+    packages: ScriptReview[];
+  }> {
+    const reviews: ScriptReview[] = [];
+    for (const p of packages.slice(0, MAX_SCRIPT_REVIEWS)) {
+      try {
+        reviews.push(await this.reviewOne(p.name.trim(), p.version?.trim()));
+      } catch (err) {
+        reviews.push({
+          package: p.name,
+          version: p.version ?? '?',
+          recommendation: 'REVIEW',
+          scripts: {},
+          reasons: [`could not be checked: ${err instanceof Error ? err.message : String(err)}`],
+        });
+      }
+    }
+    const count = (r: ScriptReview['recommendation']) => reviews.filter((x) => x.recommendation === r).length;
+    return {
+      summary: `${count('APPROVE')} approve, ${count('REVIEW')} review, ${count('DENY')} deny, ${count('NO_SCRIPTS')} without install scripts`,
+      packages: reviews,
+    };
+  }
+
+  private async reviewOne(name: string, version?: string): Promise<ScriptReview> {
+    const report = await this.checkPackage(name, version);
+    const packument = await this.registry.getPackument(name);
+    const manifest = packument?.versions[report.version];
+    const scripts: Record<string, string> = {};
+    for (const hook of ['preinstall', 'install', 'postinstall'] as const) {
+      const s = manifest?.scripts?.[hook];
+      if (s) scripts[hook] = s;
+    }
+    const base = { package: name, version: report.version, scripts };
+    if (report.verdict === 'BLOCK') {
+      return {
+        ...base,
+        recommendation: 'DENY',
+        reasons: report.findings.slice(0, 3).map((f) => f.title),
+        safeVersion: report.safeVersion?.version,
+      };
+    }
+    if (Object.keys(scripts).length === 0) {
+      return { ...base, recommendation: 'NO_SCRIPTS', reasons: ['this release runs nothing at install time'] };
+    }
+    const scriptFindings = report.findings.filter((f) => f.signal === 'install-script' || f.signal === 'code-diff');
+    if (report.verdict === 'REVIEW' || scriptFindings.length) {
+      return {
+        ...base,
+        recommendation: 'REVIEW',
+        reasons: (scriptFindings.length ? scriptFindings : report.findings).slice(0, 3).map((f) => f.title),
+      };
+    }
+    // Same script as the releases before it, from the same kind of publisher, no new code risk.
+    const previous = this.baselineFor(packument!, report.version).slice(0, 3);
+    const stable = previous.length > 0 && previous.every((m) =>
+      Object.entries(scripts).every(([hook, cmd]) => m.scripts?.[hook] === cmd),
+    );
+    return {
+      ...base,
+      recommendation: stable ? 'APPROVE' : 'REVIEW',
+      reasons: stable
+        ? [`the same install script shipped in ${previous.map((m) => m.version).join(', ')}`, 'no risk signals in this release']
+        : ['the install script is new or changed recently; check what it runs'],
+    };
+  }
+
+  private baselineFor(packument: Packument, version: string): VersionManifest[] {
+    return this.baseline(packument, version);
   }
 
   /** Vet a version bump: the target is judged against the history up to it. */
