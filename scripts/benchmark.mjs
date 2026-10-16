@@ -146,7 +146,8 @@ try {
 } finally {
   lines.close();
   server.stdin.end();
-  server.kill();
+  // SIGKILL: on Linux the server shuts down gracefully on SIGTERM and may keep running.
+  server.kill('SIGKILL');
 }
 
 const replays = rows.filter(row => row.kind === 'replay');
@@ -180,4 +181,5 @@ await mkdir(bench, { recursive: true });
 await writeFile(new URL('results.json', bench), `${JSON.stringify(rows, null, 2)}\n`);
 await writeFile(new URL('RESULTS.md', bench), markdown.join('\n'));
 console.log(summary);
-process.exitCode = blocked === incidents.length ? 0 : 1;
+// Exit explicitly: open handles to the (killed) child must not keep CI waiting.
+process.exit(blocked === incidents.length ? 0 : 1);
