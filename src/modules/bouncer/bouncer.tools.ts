@@ -1,4 +1,4 @@
-import { ToolDecorator as Tool, ExecutionContext, Injectable, RateLimit, z } from '@nitrostack/core';
+import { ToolDecorator as Tool, ExecutionContext, Injectable, RateLimit, Widget, z } from '@nitrostack/core';
 import { BouncerService } from './bouncer.service.js';
 
 const packageName = z
@@ -33,6 +33,7 @@ export class BouncerTools {
     },
   })
   @RateLimit({ requests: 30, window: '1m', message: 'Too many checks; wait a minute.' })
+  @Widget('verdict-card')
   async checkPackage(input: { name: string; version?: string }, ctx: ExecutionContext) {
     ctx.logger.info('check_package', { name: input.name, version: input.version });
     return this.bouncer.checkPackage(input.name.trim(), input.version);
@@ -53,6 +54,7 @@ export class BouncerTools {
     },
   })
   @RateLimit({ requests: 30, window: '1m', message: 'Too many checks; wait a minute.' })
+  @Widget('verdict-card')
   async checkUpgrade(input: { name: string; from: string; to: string }, ctx: ExecutionContext) {
     ctx.logger.info('check_upgrade', input);
     return this.bouncer.checkUpgrade(input.name.trim(), input.from.trim(), input.to.trim());
@@ -89,6 +91,7 @@ export class BouncerTools {
       request: { incident: 'axios' },
     },
   })
+  @Widget('verdict-card')
   async replayIncident(input: { incident: string }, ctx: ExecutionContext) {
     ctx.logger.info('replay_incident', input);
     return this.bouncer.replay(input.incident);
