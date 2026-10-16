@@ -40,6 +40,12 @@ CLIs with permission checks disabled, and the keyv worm planted Claude Code `Ses
 | `keyv@6.0.0` (valid provenance!) | installs; `preinstall` runs an obfuscated loader | **BLOCK**: new `preinstall` running a new file; obfuscated loader that spawns processes and downloads a runtime; 700 KB encrypted blob. **Install 5.6.0.** |
 | `chalk@6.0.1` today | installs | **ALLOW**: consistent with its own history |
 
+**In a real agent** (NitroChat, connected to the live server): *"Replay the axios incident
+with Dep Bouncer and tell me what to install instead."*
+
+![Dep Bouncer verdict card in NitroChat: BLOCK axios@1.14.1 with evidence](docs/img/nitrochat-axios-block.png)
+![What other checks say, and the safe version to install instead](docs/img/nitrochat-safe-version.png)
+
 ## Why this needs MCP
 
 A verdict is not one lookup. For each request the agent's tool call makes Dep Bouncer gather
