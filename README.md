@@ -2,7 +2,7 @@
 
 **`npm install`, reimagined for AI agents.**
 
-[![Built with NitroStack](https://img.shields.io/badge/Built_with-NitroStack-7c3aed)](https://nitrostack.ai) ![MCP](https://img.shields.io/badge/MCP-2563eb) [![Live on NitroCloud](https://img.shields.io/badge/Live_on-NitroCloud-22c55e)](https://dep-bouncer-6ad22414-giberelin-heapify-global-community.app.nitrocloud.ai/mcp) ![tests 191 passing](https://img.shields.io/badge/tests-191_passing-22c55e) [![benchmark 5/5 hijacks blocked](https://img.shields.io/badge/benchmark-5%2F5_hijacks_blocked-22c55e)](bench/RESULTS.md) [![0 false BLOCK on top 200](https://img.shields.io/badge/0_false_BLOCK-on_top_200-22c55e)](bench/RESULTS.md) ![license MIT](https://img.shields.io/badge/license-MIT-blue) [![CI](https://github.com/harsha31bs07-blip/dep-bouncer/actions/workflows/ci.yml/badge.svg)](https://github.com/harsha31bs07-blip/dep-bouncer/actions/workflows/ci.yml)
+[![Built with NitroStack](https://img.shields.io/badge/Built_with-NitroStack-7c3aed)](https://nitrostack.ai) ![MCP](https://img.shields.io/badge/MCP-2563eb) [![Live on NitroCloud](https://img.shields.io/badge/Live_on-NitroCloud-22c55e)](https://dep-bouncer-6ad22414-giberelin-heapify-global-community.app.nitrocloud.ai/mcp) ![tests 220 passing](https://img.shields.io/badge/tests-220_passing-22c55e) [![benchmark 5/5 hijacks blocked](https://img.shields.io/badge/benchmark-5%2F5_hijacks_blocked-22c55e)](bench/RESULTS.md) [![0 false BLOCK on top 200](https://img.shields.io/badge/0_false_BLOCK-on_top_200-22c55e)](bench/RESULTS.md) ![license MIT](https://img.shields.io/badge/license-MIT-blue) [![CI](https://github.com/harsha31bs07-blip/dep-bouncer/actions/workflows/ci.yml/badge.svg)](https://github.com/harsha31bs07-blip/dep-bouncer/actions/workflows/ci.yml)
 
 ![Before vs after](docs/img/hero.svg)
 
@@ -158,11 +158,13 @@ bodies, unknown versions). GitHub Actions runs it hourly and after every push; l
 run passes all must-checks (p50 0.4 s, p95 2.3 s).
 
 How we got here: the first run flagged webpack and vitest as BLOCK (bundlers rename chunk files
-every release). An independent security review then showed that relaxing that rule too far
-let a new payload hide behind harmless existing code, so `code-diff` now compares **lines**:
-renamed chunks stay quiet, a newly added payload line is always reported, and only low-risk
-patterns (process execution, minified code) are discounted when the package already had them.
-Numbers will move as npm does; CI re-runs the replays on every push.
+every release). Two independent security reviews found 16 issues in the first review and 10 in
+the second (Oct 17); all findings were fixed. The fixes include line-based code diffs, guard
+decisions limited to deny/ask while preserving host permission prompts, parsing wrapped commands
+and subshells, checking every package, API-key support, REVIEW for incomplete checks (excluded
+from safe-version suggestions), resolving npm aliases, flagging git/URL specs, and always
+checking packages even when publisher names match. Numbers will move as npm does; CI re-runs the
+replays on every push.
 
 ## How it compares (honestly)
 
@@ -242,7 +244,7 @@ Then ask: *"Use the safe_install prompt, then add axios to this project."*
 ```bash
 npm install
 npm run build
-npm test            # 190+ tests, offline
+npm test            # 220 tests, offline (CI on Node 22 and 24)
 npm run bench       # replays + false-positive scan (needs network)
 npm run dev         # stdio, for NitroStudio
 ```
