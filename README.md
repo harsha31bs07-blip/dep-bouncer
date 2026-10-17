@@ -110,7 +110,8 @@ or refuses (BLOCK). The `safe_install` prompt teaches any agent that loop.
 Agents forget to call tools. [`guard/`](guard/README.md) is a hook for **Claude Code**
 (`PreToolUse`) and **Cursor** (`beforeShellExecution`) that intercepts the agent's own terminal
 commands (`npm i`, `pnpm add`, `yarn add`, `bun add`, `npx`, `pnpm dlx`, ...), asks Dep Bouncer
-about each package, and **denies** BLOCK, **asks the user** on REVIEW, allows the rest.
+about each package, and **denies** BLOCK, **asks the user** on REVIEW, and emits no
+permission decision for ALLOW so the host keeps its own permission prompts.
 
 Tested with a real headless Claude Code session asked to
 `npm install react-codeshift-utils-pro chalk`: the hook denied the command ("does not exist on
@@ -135,7 +136,8 @@ npm"), the agent verified, did not work around the block, and installed only `ch
 | `known-advisory` | OSV `MAL-` entries for the exact version | anything already reported |
 
 Weights: warn 15, high 35, critical 70. **Any critical finding blocks**; otherwise the sum
-decides: < 30 ALLOW, 30–69 REVIEW, ≥ 70 BLOCK. Packages that don't exist (hallucinated names),
+decides: < 30 ALLOW, 30–69 REVIEW, ≥ 70 BLOCK. Versions with incomplete checks require
+at least REVIEW and are excluded from safe-version suggestions. Packages that don't exist (hallucinated names),
 versions npm removed, and npm's `-security` placeholders are blocked outright.
 
 ## Benchmark
@@ -252,7 +254,7 @@ No environment variables are required. Optional (see `.env.example`): `MCP_TRANS
 
 - Heuristics: a determined attacker can write code that avoids the patterns; the publisher,
   provenance, script and dependency signals still apply. Tarballs over 25 MB (e.g. `next`) skip
-  the code diff and say so.
+  the code diff and require REVIEW for incomplete coverage.
 - npm only. Next: PyPI, lockfile/CI mode, org policies (e.g. "always REVIEW new publishers").
 
 ## Built with AI assistance
