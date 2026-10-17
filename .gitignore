@@ -55,9 +55,3 @@ uploads/
 *.pem
 *.key
 tokens.json
-
-# Added by nitrostack pack
-.git/
-
-# Deploy archives (nitrostack-cli pack)
-*.zip

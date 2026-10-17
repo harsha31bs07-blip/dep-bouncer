@@ -46,12 +46,8 @@ export interface PackageInfo {
   created?: string;
   /** Manifest of dist-tags.latest. */
   latest?: VersionManifest;
-  /** Manifest of the version the requested range resolves to (what npm would install). */
-  resolved?: VersionManifest;
   versionCount: number;
   weeklyDownloads?: number;
-  /** True if OSV lists the resolved version as malware (MAL-). */
-  knownMalicious?: boolean;
 }
 
 export interface AnalysisContext {
@@ -67,11 +63,8 @@ export interface AnalysisContext {
   weeklyDownloads?: number;
   /** Replay mode: data is a labelled reconstruction, not live registry data. */
   reconstructed?: boolean;
-  /**
-   * Looks up another package (e.g. a newly added dependency). With `range`, `resolved` is the
-   * version npm would install for it. null if the package doesn't exist.
-   */
-  lookupPackage?(name: string, range?: string): Promise<PackageInfo | null>;
+  /** Looks up another package (e.g. a newly added dependency). null if it doesn't exist. */
+  lookupPackage?(name: string): Promise<PackageInfo | null>;
 }
 
 export interface Signal {
