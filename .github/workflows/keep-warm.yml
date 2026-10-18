@@ -1,0 +1,30 @@
+name: Keep the live server warm
+
+# NitroCloud scales idle servers to zero; the first request after that can get a 503 while it
+# wakes up. During judging, ping the MCP endpoint so judges and agents hit a warm server.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: List tools on the live MCP endpoint
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 30 -X POST \
+              "https://dep-bouncer-6ad22414-giberelin-heapify-global-community.app.nitrocloud.ai/mcp" \
+              -H 'content-type: application/json' \
+              -H 'accept: application/json, text/event-stream' \
+              -H 'mcp-protocol-version: 2025-06-18' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
+            echo "attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          exit 1

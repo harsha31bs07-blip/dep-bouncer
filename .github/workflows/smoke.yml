@@ -1,0 +1,29 @@
+name: Live smoke test
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Wait for deployment
+        if: github.event_name == 'push'
+        run: sleep 240
+      - name: Hourly quick smoke test
+        if: github.event_name == 'schedule'
+        run: node scripts/smoke.mjs --quick
+      - name: Full smoke test
+        if: github.event_name != 'schedule'
+        run: node scripts/smoke.mjs

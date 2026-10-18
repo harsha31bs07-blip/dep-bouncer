@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The test runner needs Node 22+ (glob patterns); production runs on NitroCloud's Node 20.
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # --ignore-scripts: a supply-chain tool should not run its own dependencies' install scripts.
+      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts
+        working-directory: src/widgets
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # Every replayed hijack must still be blocked (offline: replays use bundled fixtures).
+      - run: npm run bench -- --replays-only
