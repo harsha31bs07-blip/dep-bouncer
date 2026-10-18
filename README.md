@@ -259,11 +259,7 @@ No environment variables are required. Optional (see `.env.example`): `MCP_TRANS
   the code diff and require REVIEW for incomplete coverage.
 - npm only. Next: PyPI, lockfile/CI mode, org policies (e.g. "always REVIEW new publishers").
 
-## Built with AI assistance
-
-Harsha B S designed and directed the project. Claude Code and OpenAI Codex helped write and
-review code; every change was reviewed and tested. See [the architecture walkthrough](docs/ARCHITECTURE.md).
-
 ## Team
 
-Harsha B S (team Giberelin, Heapify Global Community) · MIT License
+Harsha B S (team Giberelin, Heapify Global Community) · MIT License ·
+[Architecture walkthrough](docs/ARCHITECTURE.md)
